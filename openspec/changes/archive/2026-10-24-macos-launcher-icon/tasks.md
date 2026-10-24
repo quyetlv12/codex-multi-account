@@ -1,0 +1,3 @@
+- [x] Render and visually inspect native-size icon assets.
+- [x] Back up the installed launcher and install its icon without changing launch behavior.
+- [x] Verify icon sizes, bundle signature and unchanged launch payload; review and archive.

@@ -4841,6 +4841,38 @@ def test_budget_safe_selection_preserves_secondary_first_when_all_primary_safe()
     assert result.account.account_id == "secondary-low"
 
 
+def test_budget_safe_usage_weighted_fallback_preserves_subscription_expiry_preference():
+    now = time.time()
+    states = [
+        AccountState(
+            "a-later",
+            AccountStatus.ACTIVE,
+            used_percent=99.0,
+            plan_type="plus",
+            subscription_expires_at=now + 5 * 86400,
+        ),
+        AccountState(
+            "z-nearest",
+            AccountStatus.ACTIVE,
+            used_percent=99.0,
+            plan_type="pro",
+            subscription_expires_at=now + 2 * 86400,
+        ),
+    ]
+
+    result = _select_account_preferring_budget_safe(
+        states,
+        prefer_earlier_reset=False,
+        prefer_subscription_expiry=True,
+        subscription_expiry_window_days=7,
+        routing_strategy="usage_weighted",
+        budget_threshold_pct=95.0,
+    )
+
+    assert result.account is not None
+    assert result.account.account_id == "z-nearest"
+
+
 def test_all_primary_pressured_fallback_prefers_healthy_over_draining():
     states = [
         AccountState(

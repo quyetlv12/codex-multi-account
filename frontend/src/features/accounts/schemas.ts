@@ -75,6 +75,7 @@ export const AccountSummarySchema = z.object({
   workspaceLabel: z.string().nullable().optional(),
   seatType: z.string().nullable().optional(),
   planType: z.string(),
+  subscriptionExpiresAt: z.iso.datetime({ offset: true }).nullable().optional(),
   routingPolicy: z.enum(["normal", "burn_first", "preserve"]).optional(),
   status: z.string(),
   securityWorkAuthorized: z.boolean().optional(),
@@ -148,6 +149,17 @@ export const AccountImportResponseSchema = z.object({
   planType: z.string(),
   status: z.string(),
 });
+export const CredentialLoginResponseSchema = z.object({
+  results: z.array(
+    z.object({
+      index: z.number().int().nonnegative(),
+      ok: z.boolean(),
+      step: z.string(),
+      account: AccountImportResponseSchema.nullable().optional(),
+    }),
+  ),
+});
+export type CredentialLoginResponse = z.infer<typeof CredentialLoginResponseSchema>;
 
 const OpenCodeOAuthAuthSchema = z.object({
   type: z.literal("oauth"),
@@ -265,6 +277,7 @@ export const AccountRoutingPolicyUpdateResponseSchema = z.object({
 
 export const AccountUpdateRequestSchema = z.object({
   securityWorkAuthorized: z.boolean().optional(),
+  subscriptionExpiresAt: z.iso.datetime({ offset: true }).nullable().optional(),
 });
 
 export const OauthStartRequestSchema = z.object({
@@ -335,6 +348,7 @@ export const ImportStateSchema = z.object({
 
 export type UsageTrendPoint = z.infer<typeof UsageTrendPointSchema>;
 export type AccountSummary = z.infer<typeof AccountSummarySchema>;
+export type AccountUpdateRequest = z.infer<typeof AccountUpdateRequestSchema>;
 export type RateLimitResetCreditItem = z.infer<typeof RateLimitResetCreditItemSchema>;
 export type RateLimitResetCreditsSnapshot = z.infer<
   typeof RateLimitResetCreditsSnapshotSchema

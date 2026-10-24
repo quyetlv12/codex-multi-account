@@ -1311,6 +1311,18 @@ class AccountsRepository:
             await self._session.commit()
             return result.scalar_one_or_none() is not None
 
+    async def update_subscription_expiry(self, account_id: str, value: datetime | None) -> bool:
+        """Set or clear the operator-managed package expiry without touching tokens."""
+        async with sqlite_writer_section():
+            result = await self._session.execute(
+                update(Account)
+                .where(Account.id == account_id)
+                .values(subscription_expires_at=value)
+                .returning(Account.id)
+            )
+            await self._session.commit()
+            return result.scalar_one_or_none() is not None
+
     async def workspace_slot_taken(
         self,
         *,

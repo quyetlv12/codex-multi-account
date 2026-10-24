@@ -1,0 +1,1 @@
+The badge is derived only from the account's stored `planType`. It does not infer a plan from quota reset timestamps, token expiry, or subscription expiry. Plus intentionally reuses the emerald visual language already used for Active; other plans remain visually distinct while preserving readable contrast in both themes.

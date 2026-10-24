@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
@@ -40,26 +40,32 @@ describe("accounts flow integration", () => {
     renderWithProviders(<App />);
 
     expect(await screen.findByRole("heading", { name: "Accounts" })).toBeInTheDocument();
-    await user.click(await screen.findByRole("button", { name: "Edit alias" }));
-    const aliasInput = await screen.findByLabelText("Account alias");
+    await user.click(await screen.findByText("primary@example.com"));
+    let dialog = await screen.findByRole("dialog", { name: "Account details" });
+    await user.click(within(dialog).getByRole("button", { name: "Edit alias" }));
+    const aliasInput = within(dialog).getByLabelText("Account alias");
     await user.clear(aliasInput);
     await user.type(aliasInput, "Personal Plus");
-    await user.click(screen.getByRole("button", { name: "Save alias" }));
+    await user.click(within(dialog).getByRole("button", { name: "Save alias" }));
 
     await waitFor(() => {
-      expect(screen.getByRole("heading", { name: "Personal Plus" })).toBeInTheDocument();
+      expect(within(dialog).getByRole("heading", { name: "Personal Plus" })).toBeInTheDocument();
     });
+    await user.click(within(dialog).getByRole("button", { name: "Close" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
 
     await user.type(screen.getByPlaceholderText("Search accounts..."), "personal");
     expect(screen.getAllByText("Personal Plus").length).toBeGreaterThan(0);
     expect(screen.queryByText("secondary@example.com")).not.toBeInTheDocument();
 
-    await user.click(await screen.findByRole("button", { name: "Edit alias" }));
-    const aliasInputToClear = await screen.findByLabelText("Account alias");
+    await user.click(screen.getByText("Personal Plus"));
+    dialog = await screen.findByRole("dialog", { name: "Account details" });
+    await user.click(within(dialog).getByRole("button", { name: "Edit alias" }));
+    const aliasInputToClear = within(dialog).getByLabelText("Account alias");
     await user.clear(aliasInputToClear);
-    await user.click(screen.getByRole("button", { name: "Save alias" }));
+    await user.click(within(dialog).getByRole("button", { name: "Save alias" }));
     await waitFor(() => {
-      expect(screen.getByRole("heading", { name: "primary@example.com" })).toBeInTheDocument();
+      expect(within(dialog).getByRole("heading", { name: "primary@example.com" })).toBeInTheDocument();
     });
   });
 });

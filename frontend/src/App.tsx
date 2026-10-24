@@ -1,5 +1,5 @@
 import { lazy, Suspense, useState } from "react";
-import { Navigate, Outlet, Route, Routes } from "react-router-dom";
+import { Navigate, Outlet, Route, Routes, useMatch } from "react-router-dom";
 
 import { AppHeader } from "@/components/layout/app-header";
 import {
@@ -39,6 +39,7 @@ function AppLayout() {
   const guestPasswordRequired = useAuthStore((state) => state.guestPasswordRequired);
   const startAdminLogin = useAuthStore((state) => state.startAdminLogin);
   const timeFormat = useTimeFormatStore((state) => state.timeFormat);
+  const isAccountsRoute = useMatch("/accounts") !== null;
   const isGuest = role === "guest";
   const [statusBarHeight, setStatusBarHeight] = useState(STATUS_BAR_DEFAULT_HEIGHT_PX);
 
@@ -56,7 +57,9 @@ function AppLayout() {
         showAdminLogin={isGuest && passwordRequired}
         showLogout={(role === "admin" && passwordRequired) || (isGuest && guestPasswordRequired)}
       />
-      <main className="mx-auto w-full max-w-[1500px] flex-1 px-4 py-8 sm:px-6">
+      <main
+        className={`mx-auto w-full flex-1 px-4 py-8 sm:px-6 ${isAccountsRoute ? "max-w-none" : "max-w-[1500px]"}`}
+      >
         <Suspense fallback={null}>
           <Outlet />
         </Suspense>

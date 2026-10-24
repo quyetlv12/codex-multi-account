@@ -3,7 +3,9 @@
 ## Purpose
 
 Define installation modes, smoke-test expectations, and the operator environment-variable contract at settings-load time, so the Helm chart remains portable across supported deployments and the configuration surface stays minimal (PRINCIPLES.md P2).
+
 ## Requirements
+
 ### Requirement: Helm chart is organized around install modes
 
 The Helm chart MUST document and support three primary install modes: bundled PostgreSQL, direct external database, and external secrets. These install contracts MUST be portable across Kubernetes providers without requiring provider-specific chart forks.
@@ -575,3 +577,14 @@ Every shipped or documented launch path for the main application MUST delegate t
 - **THEN** that command delegates to `app.cli`
 - **AND** direct SIGTERM reaches the pre-connection drain server
 
+### Requirement: Recognizable local macOS launcher icon
+
+The local macOS Codex LB launcher SHALL use a distinct navy rounded-square icon with the existing terminal mark. The ICNS asset SHALL include standard 16 through 1024 pixel representations. Updating the icon SHALL preserve the launcher identifier, executable and script, and SHALL NOT restart the service or alter account data or routing settings.
+
+#### Scenario: Updating the installed launcher icon
+
+- **GIVEN** an existing local Codex LB launcher with the generic AppleScript icon
+- **WHEN** its icon is updated
+- **THEN** macOS displays the Codex LB icon
+- **AND** the original launcher is backed up for rollback
+- **AND** the executable code excluding its renewed signature and the script remain unchanged

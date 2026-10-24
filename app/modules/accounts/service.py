@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import cast
 from uuid import uuid4
 
@@ -40,9 +40,10 @@ from app.core.utils.time import naive_utc_to_epoch, to_utc_naive, utcnow
 from app.db.models import Account, AccountStatus, DashboardSettings
 from app.db.session import get_background_session
 from app.modules.accounts.auth_manager import AuthManager
+from app.modules.accounts.credential_login import export_credentials, parse_credential_lines
 from app.modules.accounts.deletion import request_account_deletion_run
 from app.modules.accounts.mappers import build_account_summaries, build_account_usage_trends
-from app.modules.accounts.repository import AccountsRepository
+from app.modules.accounts.repository import AccountIdentityConflictError, AccountsRepository
 from app.modules.accounts.schemas import (
     AccountAdditionalQuota,
     AccountAdditionalWindow,
@@ -61,6 +62,8 @@ from app.modules.accounts.schemas import (
     AccountUsageResetCreditsResponse,
     CodexAuthJson,
     CodexAuthTokens,
+    CredentialLoginResponse,
+    CredentialLoginResult,
     OpenCodeAuthJson,
     OpenCodeOAuthAuth,
 )
@@ -80,6 +83,8 @@ from app.modules.usage.repository import AdditionalUsageRepository, UsageReposit
 from app.modules.usage.updater import AdditionalUsageRepositoryPort, UsageUpdater
 
 logger = logging.getLogger(__name__)
+
+_UNSET = object()
 
 _SPARKLINE_DAYS = 7
 _DETAIL_BUCKET_SECONDS = 3600  # 1h → 168 points
@@ -567,6 +572,24 @@ class AccountsService:
             status=saved.status,
         )
 
+    async def import_credential_lines(self, text: str) -> CredentialLoginResponse:
+        lines = parse_credential_lines(text)
+        exported = await export_credentials(lines)
+        results: list[CredentialLoginResult] = []
+        for item in exported:
+            index = item["index"]
+            if not item.get("ok"):
+                results.append(CredentialLoginResult(index=index, ok=False, step=item.get("step", "login")))
+                continue
+            try:
+                account = await self.import_account(json.dumps(item["auth"]).encode())
+            except (InvalidAuthJsonError, AccountIdentityConflictError):
+                results.append(CredentialLoginResult(index=index, ok=False, step="import"))
+            else:
+                results.append(CredentialLoginResult(index=index, ok=True, step="done", account=account))
+        results.sort(key=lambda result: result.index)
+        return CredentialLoginResponse(results=results)
+
     async def _import_usage_refresh_allowed(self, account: Account) -> bool:
         try:
             route = await resolve_upstream_route(
@@ -655,10 +678,21 @@ class AccountsService:
             await propagate_account_routing_change()
         return result
 
-    async def update_account(self, account_id: str, *, security_work_authorized: bool | None = None) -> bool:
+    async def update_account(
+        self,
+        account_id: str,
+        *,
+        security_work_authorized: bool | None = None,
+        subscription_expires_at: datetime | None | object = _UNSET,
+    ) -> bool:
         result = False
         if security_work_authorized is not None:
             result = await self._repo.update_security_work_authorized(account_id, security_work_authorized)
+        if subscription_expires_at is not _UNSET:
+            result = (
+                await self._repo.update_subscription_expiry(account_id, cast(datetime | None, subscription_expires_at))
+                or result
+            )
         if result:
             get_account_selection_cache().invalidate()
         return result

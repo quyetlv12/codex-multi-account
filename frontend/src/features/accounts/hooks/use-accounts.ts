@@ -12,6 +12,7 @@ import {
   getAccountUsageResetCredits,
   getRateLimitResetCredits,
   importAccount,
+  credentialLogin,
   listAccounts,
   pauseAccount,
   probeAccount,
@@ -23,6 +24,7 @@ import {
 } from "@/features/accounts/api";
 import type {
   AccountRoutingPolicy,
+  AccountUpdateRequest,
   AccountUsageResetConsumeResponse,
 } from "@/features/accounts/schemas";
 
@@ -89,6 +91,7 @@ export function useAccountMutations() {
       toast.error(error.message || t("accounts.toasts.importFailed"));
     },
   });
+  const credentialLoginMutation = useMutation({ mutationFn: credentialLogin, onSuccess: () => void invalidateAccountRelatedQueries(queryClient) });
 
   const pauseMutation = useMutation({
     mutationFn: pauseAccount,
@@ -212,8 +215,8 @@ export function useAccountMutations() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ accountId, securityWorkAuthorized }: { accountId: string; securityWorkAuthorized: boolean }) =>
-      updateAccount(accountId, { securityWorkAuthorized }),
+    mutationFn: ({ accountId, payload }: { accountId: string; payload: AccountUpdateRequest }) =>
+      updateAccount(accountId, payload),
     onSuccess: () => {
       toast.success(t("accounts.toasts.updated"));
       void invalidateAccountRelatedQueries(queryClient);
@@ -244,6 +247,7 @@ export function useAccountMutations() {
 
   return {
     importMutation,
+    credentialLoginMutation,
     pauseMutation,
     resumeMutation,
     setAliasMutation,

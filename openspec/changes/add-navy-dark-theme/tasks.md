@@ -1,0 +1,4 @@
+- [x] Add navy dark tokens and native dark form controls; preserve light tokens.
+- [x] Add an accessible header theme selector using the existing preference store.
+- [x] Verify selection, persistence, system mode, and existing header/settings behavior.
+- [x] Check desktop/mobile cards, forms, dialogs, and charts visually; record evidence and review.

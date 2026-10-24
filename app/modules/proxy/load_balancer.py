@@ -541,6 +541,8 @@ class LoadBalancer:
         sticky_max_age_seconds: int | None = None,
         prefer_earlier_reset_accounts: bool = False,
         prefer_earlier_reset_window: ResetPreferenceWindow = "secondary",
+        prefer_subscription_expiry: bool = False,
+        subscription_expiry_window_days: int = 7,
         routing_strategy: RoutingStrategy = "capacity_weighted",
         relative_availability_power: float = 2.0,
         relative_availability_top_k: int = 5,
@@ -824,6 +826,8 @@ class LoadBalancer:
                 request=UnboundSelectionRequest(
                     prefer_earlier_reset_accounts=prefer_earlier_reset_accounts,
                     prefer_earlier_reset_window=prefer_earlier_reset_window,
+                    prefer_subscription_expiry=prefer_subscription_expiry,
+                    subscription_expiry_window_days=subscription_expiry_window_days,
                     routing_strategy=routing_strategy,
                     relative_availability_power=relative_availability_power,
                     relative_availability_top_k=relative_availability_top_k,
@@ -898,6 +902,8 @@ class LoadBalancer:
                     sticky_max_age_seconds=sticky_max_age_seconds,
                     prefer_earlier_reset_accounts=prefer_earlier_reset_accounts,
                     prefer_earlier_reset_window=prefer_earlier_reset_window,
+                    prefer_subscription_expiry=prefer_subscription_expiry,
+                    subscription_expiry_window_days=subscription_expiry_window_days,
                     routing_strategy=routing_strategy,
                     relative_availability_power=relative_availability_power,
                     relative_availability_top_k=relative_availability_top_k,
@@ -1008,6 +1014,8 @@ class LoadBalancer:
         states: list[AccountState],
         *,
         prefer_earlier_reset: bool,
+        prefer_subscription_expiry: bool = False,
+        subscription_expiry_window_days: int = 7,
         prefer_earlier_reset_window: ResetPreferenceWindow,
         routing_strategy: RoutingStrategy,
         relative_availability_power: float,
@@ -1377,6 +1385,8 @@ class LoadBalancer:
         model: str | None,
         account_ids: Collection[str] | None,
         prefer_earlier_reset_accounts: bool,
+        prefer_subscription_expiry: bool = False,
+        subscription_expiry_window_days: int = 7,
         routing_strategy: RoutingStrategy,
         budget_threshold_pct: float,
         prefer_earlier_reset_window: ResetPreferenceWindow = "secondary",
@@ -1430,6 +1440,8 @@ class LoadBalancer:
         result = _select_account_preferring_budget_safe(
             selection_states,
             prefer_earlier_reset=prefer_earlier_reset_accounts,
+            prefer_subscription_expiry=prefer_subscription_expiry,
+            subscription_expiry_window_days=subscription_expiry_window_days,
             prefer_earlier_reset_window=prefer_earlier_reset_window,
             routing_strategy=routing_strategy,
             budget_threshold_pct=budget_threshold_pct,
@@ -1659,6 +1671,8 @@ class LoadBalancer:
         secondary_budget_threshold_pct: float = 100.0,
         prefer_earlier_reset_accounts: bool,
         prefer_earlier_reset_window: ResetPreferenceWindow,
+        prefer_subscription_expiry: bool = False,
+        subscription_expiry_window_days: int = 7,
         routing_strategy: RoutingStrategy,
         relative_availability_power: float = 2.0,
         relative_availability_top_k: int = 5,
@@ -1684,6 +1698,8 @@ class LoadBalancer:
             secondary_budget_threshold_pct=secondary_budget_threshold_pct,
             prefer_earlier_reset_accounts=prefer_earlier_reset_accounts,
             prefer_earlier_reset_window=prefer_earlier_reset_window,
+            prefer_subscription_expiry=prefer_subscription_expiry,
+            subscription_expiry_window_days=subscription_expiry_window_days,
             routing_strategy=routing_strategy,
             relative_availability_power=relative_availability_power,
             relative_availability_top_k=relative_availability_top_k,
@@ -1945,6 +1961,7 @@ class LoadBalancer:
             error_count=runtime.error_count,
             deactivation_reason=account.deactivation_reason,
             plan_type=account.plan_type,
+            subscription_expires_at=_subscription_expiry_epoch(account.subscription_expires_at),
             capacity_credits=usage_core.capacity_for_plan(account.plan_type, "secondary"),
             routing_policy=routing_policy,
             ignore_standard_quota=False,
@@ -2573,6 +2590,7 @@ def _state_from_account(
         error_count=runtime.error_count,
         deactivation_reason=account.deactivation_reason,
         plan_type=account.plan_type,
+        subscription_expires_at=_subscription_expiry_epoch(account.subscription_expires_at),
         capacity_credits=capacity_credits,
         health_tier=new_tier,
         priority_used_percent=used_percent if usage_exhaustion_evidence_status else None,
@@ -3171,6 +3189,13 @@ def _additional_usage_is_exhausted(entry: AdditionalUsageHistory) -> bool:
     if entry.reset_at is not None and int(entry.reset_at) <= int(time.time()):
         return False
     return float(entry.used_percent) >= 100.0
+
+
+def _subscription_expiry_epoch(value: datetime | None) -> float | None:
+    if value is None:
+        return None
+    normalized = value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
+    return normalized.astimezone(timezone.utc).timestamp()
 
 
 def _is_upstream_circuit_breaker_open() -> bool:

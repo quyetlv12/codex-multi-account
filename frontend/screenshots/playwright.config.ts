@@ -3,11 +3,11 @@ import { defineConfig } from "@playwright/test";
 const screenshotPort = Number(process.env.SCREENSHOT_PORT ?? "4173");
 const screenshotWebServerCommand =
   process.env.SCREENSHOT_WEBSERVER_COMMAND ??
-  `bun run build && bun run preview --port ${screenshotPort}`;
+  `bun run build && bun run preview --host 127.0.0.1 --port ${screenshotPort} --strictPort`;
 
 export default defineConfig({
   testDir: ".",
-  testMatch: "capture.spec.ts",
+  testMatch: ["capture.spec.ts", "account-detail.spec.ts", "vietnamese.spec.ts"],
   timeout: 60_000,
   workers: 1,
   use: {

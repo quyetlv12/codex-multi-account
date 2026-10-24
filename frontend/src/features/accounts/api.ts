@@ -6,6 +6,7 @@ import {
   AccountAliasResponseSchema,
   AccountAuthExportResponseSchema,
   AccountImportResponseSchema,
+  CredentialLoginResponseSchema,
   AccountLimitWarmupUpdateRequestSchema,
   AccountLimitWarmupUpdateResponseSchema,
   AccountUpdateRequestSchema,
@@ -46,6 +47,12 @@ export function importAccount(file: File) {
   formData.append("auth_json", file);
   return post(`${ACCOUNTS_BASE_PATH}/import`, AccountImportResponseSchema, {
     body: formData,
+  });
+}
+export function credentialLogin(text: string) {
+  return post(`${ACCOUNTS_BASE_PATH}/credential-login`, CredentialLoginResponseSchema, {
+    body: text,
+    headers: { "Content-Type": "text/plain;charset=UTF-8" },
   });
 }
 

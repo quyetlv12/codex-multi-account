@@ -3,7 +3,9 @@
 ## Purpose
 
 Define dashboard surface contracts so settings, account management, and operational views stay coherent across the SPA.
+
 ## Requirements
+
 ### Requirement: Settings page
 
 The Settings page SHALL include sections for: routing settings (sticky threads,
@@ -3348,3 +3350,52 @@ The x-axis tick format of the Account Trend and API Trend charts SHALL be `MM-DD
 - **WHEN** the API Trend chart renders with timestamp data
 - **THEN** the x-axis tick labels SHALL be in `MM-DD` format (e.g., `"08-09"`)
 
+### Requirement: Vietnamese runtime locale
+
+The dashboard SHALL support `vi` with the label `Tiếng Việt` in desktop and mobile
+language selectors. It SHALL translate every English locale key, preserve
+interpolation variables and technical identifiers, and format localizable dates
+and numbers using `vi-VN`. Existing compact K/M/B and USD display conventions SHALL
+remain unchanged.
+
+#### Scenario: Select and retain Vietnamese
+
+- **WHEN** a user selects Tiếng Việt
+- **THEN** the dashboard renders Vietnamese text and sets the document language to `vi`
+- **AND** reloading retains that choice through `codex-lb-language`
+- **AND** no account or routing settings change
+
+#### Scenario: Default to Vietnamese
+
+- **WHEN** the dashboard opens without a stored or explicitly requested language
+- **THEN** the dashboard uses the Vietnamese bundle
+- **AND** existing stored language choices retain precedence over this default
+- **AND** an explicitly requested `vi-VN` locale is normalized to `vi`
+
+#### Scenario: Complete Vietnamese translations
+
+- **WHEN** locale keys and interpolation placeholders are compared with English
+- **THEN** every English key and its placeholders are present in Vietnamese
+- **AND** account plan expiry is described separately from quota reset and token expiry
+
+### Requirement: Full-width header with navigation icons
+
+The application header SHALL span the available viewport width with horizontal
+padding and no centered maximum-width cap. Every core and advanced navigation
+destination SHALL display a decorative Lucide icon alongside its translated
+label on desktop and in the compact menu. Icons SHALL be hidden from assistive
+technology so the existing accessible names remain unchanged.
+
+#### Scenario: Wide desktop navigation
+
+- **WHEN** the viewport is at least 1280 CSS pixels wide
+- **THEN** the header brand and action controls align with the header's outer padding
+- **AND** the desktop menu displays icons and labels without overlap or overflow
+- **AND** existing routes, active states, reset-credit badges and Advanced grouping remain available
+
+#### Scenario: Compact navigation
+
+- **WHEN** the viewport is narrower than 1280 CSS pixels
+- **THEN** the header exposes a compact menu button instead of the desktop menu
+- **AND** opening it displays the same destinations with icons and translated labels
+- **AND** selecting a destination navigates and closes the menu

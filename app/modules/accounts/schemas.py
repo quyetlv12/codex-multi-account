@@ -89,6 +89,7 @@ class AccountSummary(DashboardModel):
     workspace_label: str | None = None
     seat_type: str | None = None
     plan_type: str
+    subscription_expires_at: datetime | None = None
     routing_policy: str = Field(default="normal", pattern=r"^(normal|burn_first|preserve)$")
     status: str
     security_work_authorized: bool = False
@@ -145,6 +146,17 @@ class AccountImportResponse(DashboardModel):
     status: str
 
 
+class CredentialLoginResult(DashboardModel):
+    index: int = Field(ge=0)
+    ok: bool
+    step: str
+    account: AccountImportResponse | None = None
+
+
+class CredentialLoginResponse(DashboardModel):
+    results: list[CredentialLoginResult] = Field(default_factory=list)
+
+
 class OpenCodeOAuthAuth(DashboardModel):
     type: str = "oauth"
     refresh: str
@@ -171,6 +183,7 @@ class AccountOpenCodeAuthExportResponse(DashboardModel):
 
 class AccountUpdateRequest(DashboardModel):
     security_work_authorized: bool | None = None
+    subscription_expires_at: datetime | None = None
 
 
 class AccountUpdateResponse(DashboardModel):

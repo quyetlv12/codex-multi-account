@@ -15,6 +15,9 @@ function getIntlLocale(): string {
   if (language.startsWith("zh")) {
     return "zh-CN";
   }
+  if (language.startsWith("vi")) {
+    return "vi-VN";
+  }
   return "en-US";
 }
 

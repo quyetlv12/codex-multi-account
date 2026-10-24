@@ -1,0 +1,9 @@
+- [x] Add list/card toggle and card rendering, with cards as the default view.
+- [x] Reuse existing account actions and detail flow.
+- [x] Preserve quota/reset and subscription expiry distinctions.
+- [x] Add focused UI regression tests and verify dashboard build.
+- [x] Add explicit View details action and align account action buttons in a responsive grid.
+- [x] Use four card columns at the 1536px viewport breakpoint while retaining three columns below it.
+- [x] Verify responsive card track counts at mobile, laptop and wide desktop viewport sizes.
+- [x] Let the Accounts content use the full available viewport width without changing other route containers.
+- [x] Verify full-width Accounts layout at wide desktop and preserve laptop/mobile overflow behavior.

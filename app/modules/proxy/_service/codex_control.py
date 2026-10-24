@@ -235,6 +235,8 @@ class _CodexControlMixin:
             sticky_max_age_seconds=affinity.max_age_seconds,
             account_ids=scoped_account_ids,
             prefer_earlier_reset_window=prefer_earlier_reset_window,
+            prefer_subscription_expiry=settings.prefer_subscription_expiry_accounts,
+            subscription_expiry_window_days=settings.subscription_expiry_window_days,
             redact_sensitive_details=privacy_policy.redacts_sensitive_details,
             routing_strategy=_routing_strategy(settings),
             budget_threshold_pct=_sticky_reallocation_primary_budget_threshold_pct(settings),

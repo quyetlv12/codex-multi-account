@@ -44,6 +44,8 @@ class DashboardSettingsResponse(DashboardModel):
     upstream_proxy_default_pool_id: str | None = None
     prefer_earlier_reset_accounts: bool
     prefer_earlier_reset_window: str = Field(pattern=r"^(primary|secondary)$")
+    prefer_subscription_expiry_accounts: bool
+    subscription_expiry_window_days: int = Field(ge=1, le=365)
     show_reset_credit_badges: bool
     auto_redeem_reset_credits_before_expiry: bool
     show_reset_credit_expiry_badge: bool
@@ -108,6 +110,8 @@ class DashboardSettingsUpdateRequest(DashboardModel):
     upstream_proxy_default_pool_id: str | None = None
     prefer_earlier_reset_accounts: bool | None = None
     prefer_earlier_reset_window: str | None = Field(default=None, pattern=r"^(primary|secondary)$")
+    prefer_subscription_expiry_accounts: bool | None = None
+    subscription_expiry_window_days: int | None = Field(default=None, ge=1, le=365)
     show_reset_credit_badges: bool | None = None
     auto_redeem_reset_credits_before_expiry: bool | None = None
     show_reset_credit_expiry_badge: bool | None = None

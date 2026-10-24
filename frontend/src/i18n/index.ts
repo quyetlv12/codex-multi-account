@@ -4,9 +4,10 @@ import { initReactI18next } from "react-i18next";
 
 import en from "./locales/en.json";
 import ko from "./locales/ko.json";
+import vi from "./locales/vi.json";
 import zhCN from "./locales/zh-CN.json";
 
-export const SUPPORTED_LANGUAGES = ["en", "zh-CN", "ko"] as const;
+export const SUPPORTED_LANGUAGES = ["en", "zh-CN", "ko", "vi"] as const;
 export type SupportedLanguage = (typeof SUPPORTED_LANGUAGES)[number];
 
 export const LANGUAGE_STORAGE_KEY = "codex-lb-language";
@@ -15,6 +16,7 @@ const resources = {
   en: { translation: en },
   "zh-CN": { translation: zhCN },
   ko: { translation: ko },
+  vi: { translation: vi },
 } as const;
 
 export function normalizeSupportedLanguage(lng: string | null | undefined): SupportedLanguage {
@@ -35,6 +37,9 @@ export function normalizeSupportedLanguage(lng: string | null | undefined): Supp
   if (baseLanguage === "ko") {
     return "ko";
   }
+  if (baseLanguage === "vi") {
+    return "vi";
+  }
   return "en";
 }
 
@@ -44,11 +49,11 @@ void i18n
   .init({
     resources,
     supportedLngs: [...SUPPORTED_LANGUAGES],
-    fallbackLng: "en",
+    fallbackLng: "vi",
     load: "currentOnly",
     interpolation: { escapeValue: false },
     detection: {
-      order: ["querystring", "localStorage", "navigator"],
+      order: ["querystring", "localStorage"],
       lookupQuerystring: "lang",
       lookupLocalStorage: LANGUAGE_STORAGE_KEY,
       caches: ["localStorage"],

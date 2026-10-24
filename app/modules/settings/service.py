@@ -25,6 +25,8 @@ class DashboardSettingsData:
     upstream_proxy_default_pool_id: str | None
     prefer_earlier_reset_accounts: bool
     prefer_earlier_reset_window: str
+    prefer_subscription_expiry_accounts: bool
+    subscription_expiry_window_days: int
     show_reset_credit_badges: bool
     auto_redeem_reset_credits_before_expiry: bool
     show_reset_credit_expiry_badge: bool
@@ -80,6 +82,8 @@ class DashboardSettingsUpdateData:
     upstream_proxy_default_pool_id: str | None
     prefer_earlier_reset_accounts: bool
     prefer_earlier_reset_window: str
+    prefer_subscription_expiry_accounts: bool
+    subscription_expiry_window_days: int
     show_reset_credit_badges: bool
     auto_redeem_reset_credits_before_expiry: bool
     show_reset_credit_expiry_badge: bool
@@ -145,6 +149,8 @@ class SettingsService:
             upstream_proxy_default_pool_id=row.upstream_proxy_default_pool_id,
             prefer_earlier_reset_accounts=row.prefer_earlier_reset_accounts,
             prefer_earlier_reset_window=row.prefer_earlier_reset_window,
+            prefer_subscription_expiry_accounts=row.prefer_subscription_expiry_accounts,
+            subscription_expiry_window_days=row.subscription_expiry_window_days,
             show_reset_credit_badges=row.show_reset_credit_badges,
             auto_redeem_reset_credits_before_expiry=row.auto_redeem_reset_credits_before_expiry,
             show_reset_credit_expiry_badge=row.show_reset_credit_expiry_badge,
@@ -215,6 +221,8 @@ class SettingsService:
             upstream_proxy_default_pool_id=payload.upstream_proxy_default_pool_id,
             prefer_earlier_reset_accounts=payload.prefer_earlier_reset_accounts,
             prefer_earlier_reset_window=payload.prefer_earlier_reset_window,
+            prefer_subscription_expiry_accounts=payload.prefer_subscription_expiry_accounts,
+            subscription_expiry_window_days=payload.subscription_expiry_window_days,
             show_reset_credit_badges=payload.show_reset_credit_badges,
             auto_redeem_reset_credits_before_expiry=payload.auto_redeem_reset_credits_before_expiry,
             show_reset_credit_expiry_badge=payload.show_reset_credit_expiry_badge,
@@ -275,6 +283,8 @@ class SettingsService:
             upstream_proxy_default_pool_id=row.upstream_proxy_default_pool_id,
             prefer_earlier_reset_accounts=row.prefer_earlier_reset_accounts,
             prefer_earlier_reset_window=row.prefer_earlier_reset_window,
+            prefer_subscription_expiry_accounts=row.prefer_subscription_expiry_accounts,
+            subscription_expiry_window_days=row.subscription_expiry_window_days,
             show_reset_credit_badges=row.show_reset_credit_badges,
             auto_redeem_reset_credits_before_expiry=row.auto_redeem_reset_credits_before_expiry,
             show_reset_credit_expiry_badge=row.show_reset_credit_expiry_badge,

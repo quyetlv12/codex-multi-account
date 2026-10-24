@@ -23,6 +23,7 @@ from app.core.multipart import ACCOUNT_IMPORT_MULTIPART_POLICY, bounded_multipar
 from app.core.multipart_fields import required_upload
 from app.core.upstream_proxy import UpstreamProxyRouteError
 from app.dependencies import AccountsContext, get_accounts_context, get_proxy_service_for_app
+from app.modules.accounts.credential_login import CredentialImportError
 from app.modules.accounts.repository import AccountIdentityConflictError
 from app.modules.accounts.schemas import (
     AccountAliasRequest,
@@ -47,6 +48,7 @@ from app.modules.accounts.schemas import (
     AccountUsageResetConsumeRequest,
     AccountUsageResetConsumeResponse,
     AccountUsageResetCreditsResponse,
+    CredentialLoginResponse,
 )
 from app.modules.accounts.service import (
     AccountNotProbableError,
@@ -282,6 +284,24 @@ async def import_account(
         raise DashboardConflictError(str(exc), code="duplicate_identity_conflict") from exc
 
 
+@router.post("/credential-login", response_model=CredentialLoginResponse)
+async def credential_login(
+    request: Request,
+    response: Response,
+    _write_access=Depends(require_dashboard_write_access),
+    context: AccountsContext = Depends(get_accounts_context),
+) -> CredentialLoginResponse:
+    raw = await request.body()
+    if len(raw) > 64 * 1024:
+        raise DashboardBadRequestError("Credential input is too large", code="credential_input_too_large")
+    try:
+        result = await context.service.import_credential_lines(raw.decode("utf-8"))
+        response.headers["Cache-Control"] = "no-store"
+        return result
+    except (UnicodeDecodeError, CredentialImportError) as exc:
+        raise DashboardBadRequestError("Invalid credential input", code="invalid_credential_input") from exc
+
+
 @router.post("/{account_id}/reactivate", response_model=AccountReactivateResponse)
 async def reactivate_account(
     account_id: str,
@@ -305,13 +325,17 @@ async def update_account(
     _write_access=Depends(require_dashboard_write_access),
     context: AccountsContext = Depends(get_accounts_context),
 ) -> AccountUpdateResponse:
-    changed_fields = [field for field, value in payload.model_dump(exclude_unset=True).items() if value is not None]
+    changed_fields = [
+        field
+        for field, value in payload.model_dump(exclude_unset=True).items()
+        if value is not None or field == "subscription_expires_at"
+    ]
     if not changed_fields:
         raise DashboardBadRequestError("No supported account fields to update", code="empty_account_update")
-    success = await context.service.update_account(
-        account_id,
-        security_work_authorized=payload.security_work_authorized,
-    )
+    update_kwargs = {"security_work_authorized": payload.security_work_authorized}
+    if "subscription_expires_at" in payload.model_fields_set:
+        update_kwargs["subscription_expires_at"] = payload.subscription_expires_at
+    success = await context.service.update_account(account_id, **update_kwargs)
     if not success:
         raise DashboardNotFoundError("Account not found", code="account_not_found")
     AuditService.log_async(

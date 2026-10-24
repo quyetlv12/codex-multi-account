@@ -310,6 +310,19 @@ describe("RoutingSettings", () => {
     );
   });
 
+  it("saves subscription expiry preference when toggled", async () => {
+    const user = userEvent.setup();
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(<RoutingSettings settings={BASE_SETTINGS} busy={false} onSave={onSave} />);
+
+    await user.click(screen.getByRole("switch", { name: "Prefer subscription expiry accounts" }));
+
+    expect(onSave).toHaveBeenCalledWith({
+      ...BASE_UPDATE_PAYLOAD,
+      preferSubscriptionExpiryAccounts: true,
+    });
+  });
+
   it("shows the configured upstream transport", () => {
     render(<RoutingSettings settings={BASE_SETTINGS} busy={false} onSave={vi.fn().mockResolvedValue(undefined)} />);
 

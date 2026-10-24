@@ -10,6 +10,7 @@ import {
   Trash2,
   Zap,
 } from "lucide-react";
+import { useId } from "react";
 import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
@@ -64,6 +65,7 @@ export function AccountActions({
   onRoutingPolicyChange,
 }: AccountActionsProps) {
   const { t } = useTranslation();
+  const securitySwitchId = useId();
   const showOperatorRecoveryAction =
     account.status === "reauth_required" || account.status === "deactivated";
   const probeDisabled =
@@ -80,7 +82,7 @@ export function AccountActions({
     showOperatorRecoveryAction;
 
   return (
-    <div className="space-y-3 border-t pt-4">
+    <div className="@container space-y-3 border-t pt-4">
       {!showOperatorRecoveryAction ? (
         <div className="flex flex-col gap-2 rounded-md border bg-muted/30 p-3 sm:flex-row sm:items-center sm:gap-3">
           <div className="flex min-w-0 items-center gap-2 text-sm font-medium sm:min-w-36">
@@ -114,7 +116,7 @@ export function AccountActions({
       ) : null}
 
       <label
-        htmlFor={`security-work-authorized-${account.accountId}`}
+        htmlFor={securitySwitchId}
         className="flex min-w-0 items-center justify-between gap-3 rounded-md border px-3 py-2"
       >
         <span className="flex min-w-0 items-center gap-2 text-xs font-medium">
@@ -122,7 +124,7 @@ export function AccountActions({
           <span className="truncate">{t("accounts.actions.trustedAccess")}</span>
         </span>
         <Switch
-          id={`security-work-authorized-${account.accountId}`}
+          id={securitySwitchId}
           className="shrink-0"
           checked={account.securityWorkAuthorized ?? false}
           disabled={busy || readOnly}
@@ -132,12 +134,12 @@ export function AccountActions({
         />
       </label>
 
-      <div className="flex flex-wrap gap-2">
+      <div className="grid grid-cols-2 gap-2 @[32rem]:grid-cols-3">
         {account.status === "paused" ? (
           <Button
             type="button"
             size="sm"
-            className="h-8 gap-1.5 text-xs"
+            className="h-9 w-full gap-1.5 text-xs"
             onClick={() => onResume(account.accountId)}
             disabled={busy || readOnly}
           >
@@ -149,7 +151,7 @@ export function AccountActions({
             type="button"
             size="sm"
             variant="outline"
-            className="h-8 gap-1.5 text-xs"
+            className="h-9 w-full gap-1.5 text-xs"
             onClick={() => onPause(account.accountId)}
             disabled={busy || readOnly}
           >
@@ -163,7 +165,7 @@ export function AccountActions({
             type="button"
             size="sm"
             variant="outline"
-            className="h-8 gap-1.5 text-xs"
+            className="h-9 w-full gap-1.5 text-xs"
             onClick={onReauth}
             disabled={busy || readOnly}
           >
@@ -176,7 +178,7 @@ export function AccountActions({
           type="button"
           size="sm"
           variant="outline"
-          className="h-8 gap-1.5 text-xs"
+          className="h-9 w-full gap-1.5 text-xs"
           onClick={() => onProbe(account.accountId)}
           disabled={probeDisabled}
         >
@@ -188,7 +190,7 @@ export function AccountActions({
           type="button"
           size="sm"
           variant="outline"
-          className="h-8 gap-1.5 text-xs"
+          className="h-9 w-full gap-1.5 text-xs"
           onClick={() =>
             onLimitWarmupChange(account.accountId, !account.limitWarmupEnabled)
           }
@@ -202,7 +204,7 @@ export function AccountActions({
           type="button"
           size="sm"
           variant="outline"
-          className="h-8 gap-1.5 text-xs"
+          className="h-9 w-full gap-1.5 text-xs"
           onClick={() => onExportAuth(account.accountId)}
           disabled={busy || readOnly}
         >
@@ -215,7 +217,7 @@ export function AccountActions({
             type="button"
             size="sm"
             variant="outline"
-            className="relative h-8 gap-1.5 pr-8 text-xs"
+            className="relative h-9 w-full gap-1.5 pr-8 text-xs"
             onClick={() => onResetCredit(account.accountId)}
             disabled={resetCreditDisabled}
           >
@@ -241,7 +243,7 @@ export function AccountActions({
           type="button"
           size="sm"
           variant="destructive"
-          className="h-8 gap-1.5 text-xs"
+          className="h-9 w-full gap-1.5 text-xs"
           onClick={() => onDelete(account.accountId)}
           disabled={busy || readOnly}
         >

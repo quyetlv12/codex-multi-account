@@ -1,10 +1,11 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 
 import { AccountsPage } from "@/features/accounts/components/accounts-page";
 import { useAccountQuotaDisplayStore } from "@/hooks/use-account-quota-display";
+import { useAuthStore } from "@/features/auth/hooks/use-auth";
 import type { AccountSummary } from "@/features/accounts/schemas";
 
 vi.mock("@/features/accounts/hooks/use-accounts", () => ({
@@ -63,7 +64,7 @@ vi.mock("@/features/settings/hooks/use-settings", () => ({
   })),
 }));
 
-const { useAccounts } = await import("@/features/accounts/hooks/use-accounts");
+const { useAccounts, useAccountUsageResetCredits } = await import("@/features/accounts/hooks/use-accounts");
 const mockedUseAccounts = useAccounts as unknown as ReturnType<typeof vi.fn>;
 
 function idleMutation() {
@@ -89,6 +90,7 @@ function account(overrides: Partial<AccountSummary>): AccountSummary {
 
 describe("AccountsPage", () => {
   beforeEach(() => {
+    useAuthStore.setState({ canWrite: true });
     useAccountQuotaDisplayStore.setState({ quotaDisplay: "weekly" });
     vi.spyOn(Date, "now").mockReturnValue(
       new Date("2026-01-01T12:00:00.000Z").getTime(),
@@ -99,7 +101,8 @@ describe("AccountsPage", () => {
     vi.restoreAllMocks();
   });
 
-  it("defaults the selected account to the first account after display sorting", () => {
+  it("defaults to cards and preserves the selected account when switching to list", async () => {
+    const user = userEvent.setup();
     mockedUseAccounts.mockReturnValue({
       accountsQuery: {
         data: [
@@ -122,6 +125,7 @@ describe("AccountsPage", () => {
         refetch: vi.fn(),
       },
       importMutation: idleMutation(),
+      credentialLoginMutation: idleMutation(),
       pauseMutation: idleMutation(),
       resumeMutation: idleMutation(),
       probeMutation: idleMutation(),
@@ -144,13 +148,16 @@ describe("AccountsPage", () => {
       screen
         .getAllByText(/^(Visible First|API First)$/)
         .map((el) => el.textContent),
-    ).toEqual(["Visible First", "API First", "Visible First"]);
+    ).toEqual(["Visible First", "API First"]);
+    expect(screen.getAllByRole("button", { name: "View details" })).toHaveLength(2);
+    await user.click(screen.getByRole("button", { name: "View accounts as a list" }));
     expect(
       screen.getByRole("heading", { name: "Visible First" }),
     ).toBeInTheDocument();
   });
 
-  it("renders account panels with mobile-first responsive containment", () => {
+  it("renders account panels with mobile-first responsive containment", async () => {
+    const user = userEvent.setup();
     mockedUseAccounts.mockReturnValue({
       accountsQuery: {
         data: [
@@ -164,6 +171,7 @@ describe("AccountsPage", () => {
         refetch: vi.fn(),
       },
       importMutation: idleMutation(),
+      credentialLoginMutation: idleMutation(),
       pauseMutation: idleMutation(),
       resumeMutation: idleMutation(),
       probeMutation: idleMutation(),
@@ -182,6 +190,7 @@ describe("AccountsPage", () => {
       </MemoryRouter>,
     );
 
+    await user.click(screen.getByRole("button", { name: "View accounts as a list" }));
     expect(screen.getByTestId("accounts-layout")).toHaveClass(
       "grid-cols-1",
       "min-w-0",
@@ -210,6 +219,7 @@ describe("AccountsPage", () => {
         refetch: vi.fn(),
       },
       importMutation: idleMutation(),
+      credentialLoginMutation: idleMutation(),
       pauseMutation: idleMutation(),
       resumeMutation: idleMutation(),
       probeMutation: idleMutation(),
@@ -263,6 +273,7 @@ describe("AccountsPage", () => {
         refetch: vi.fn(),
       },
       importMutation: idleMutation(),
+      credentialLoginMutation: idleMutation(),
       pauseMutation: idleMutation(),
       resumeMutation: idleMutation(),
       probeMutation: idleMutation(),
@@ -285,6 +296,7 @@ describe("AccountsPage", () => {
       </MemoryRouter>,
     );
 
+    await user.click(screen.getByRole("button", { name: "View details" }));
     await user.click(screen.getByRole("button", { name: "Reset usage" }));
 
     const dialog = await screen.findByRole("alertdialog", { name: "Reset usage" });
@@ -292,6 +304,8 @@ describe("AccountsPage", () => {
 
     await user.click(within(dialog).getByRole("button", { name: "Reset" }));
 
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+    expect(screen.getByRole("dialog", { name: "Account details" })).toBeVisible();
     await waitFor(() => {
       expect(resetUsage).toHaveBeenCalledWith({ accountId: "acc-reset" });
     });
@@ -326,6 +340,7 @@ describe("AccountsPage", () => {
         refetch: vi.fn(),
       },
       importMutation: idleMutation(),
+      credentialLoginMutation: idleMutation(),
       pauseMutation: idleMutation(),
       resumeMutation: idleMutation(),
       probeMutation: {
@@ -353,4 +368,94 @@ describe("AccountsPage", () => {
     expect(probe).toHaveBeenCalledWith({ accountId: "acc-probe" });
     expect(screen.queryByRole("alertdialog", { name: "Reset usage" })).not.toBeInTheDocument();
   });
+
+  function mockAccounts(data: AccountSummary[]) {
+    const state = {
+      accountsQuery: { data, error: null, refetch: vi.fn() },
+      importMutation: idleMutation(), credentialLoginMutation: idleMutation(),
+      pauseMutation: idleMutation(), resumeMutation: idleMutation(),
+      probeMutation: idleMutation(), usageResetMutation: idleMutation(),
+      deleteMutation: idleMutation(), exportAuthMutation: idleMutation(),
+      setAliasMutation: idleMutation(), limitWarmupMutation: idleMutation(),
+      routingPolicyMutation: idleMutation(), updateMutation: idleMutation(),
+    };
+    mockedUseAccounts.mockReturnValue(state);
+    return state;
+  }
+
+  it("opens the clicked card in a modal and restores focus after Close and Escape", async () => {
+    const user = userEvent.setup();
+    mockAccounts([
+      account({ accountId: "acc-one", displayName: "First account" }),
+      account({ accountId: "acc-two", displayName: "Second account" }),
+    ]);
+    render(<MemoryRouter><AccountsPage /></MemoryRouter>);
+    const trigger = screen.getAllByRole("button", { name: "View details" })[1]!;
+    await user.click(trigger);
+    const dialog = screen.getByRole("dialog", { name: "Account details" });
+    expect(within(dialog).getByRole("heading", { name: "Second account" })).toBeVisible();
+    expect(within(dialog).queryByRole("heading", { name: "First account" })).toBeNull();
+    expect(useAccountUsageResetCredits).toHaveBeenLastCalledWith("acc-two");
+    // The card and detail switches must have separate label targets.
+    const ids = Array.from(document.querySelectorAll('[role="switch"]')).map((el) => el.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    await user.click(within(dialog).getByRole("button", { name: "Close" }));
+    await waitFor(() => expect(trigger).toHaveFocus());
+    expect(screen.getAllByRole("button", { name: "View details" })).toHaveLength(2);
+    await user.click(trigger);
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(trigger).toHaveFocus();
+  });
+
+  it("saves and clears plan expiry on the modal account, preserving its mutation error", async () => {
+    const user = userEvent.setup();
+    const state = mockAccounts([
+      account({ accountId: "acc-one", displayName: "First account" }),
+      account({ accountId: "acc-two", displayName: "Second account", subscriptionExpiresAt: "2026-01-31T12:00:00Z" }),
+    ]);
+    const { rerender } = render(<MemoryRouter><AccountsPage /></MemoryRouter>);
+    await user.click(screen.getAllByRole("button", { name: "View details" })[1]!);
+    const dialog = screen.getByRole("dialog", { name: "Account details" });
+    const field = within(dialog).getByLabelText("Subscription expiry");
+    fireEvent.change(field, { target: { value: "2026-02-15" } });
+    await user.click(within(dialog).getByRole("button", { name: /^Save$/ }));
+    expect(state.updateMutation.mutateAsync).toHaveBeenLastCalledWith({ accountId: "acc-two", payload: { subscriptionExpiresAt: "2026-02-15T23:59:59+00:00" } });
+    await user.click(within(dialog).getByRole("button", { name: "Clear" }));
+    await user.click(within(dialog).getByRole("button", { name: /^Save$/ }));
+    expect(state.updateMutation.mutateAsync).toHaveBeenLastCalledWith({ accountId: "acc-two", payload: { subscriptionExpiresAt: null } });
+    mockedUseAccounts.mockReturnValue({ ...state, updateMutation: { ...state.updateMutation, error: new Error("Could not save date") } });
+    rerender(<MemoryRouter><AccountsPage /></MemoryRouter>);
+    expect(within(dialog).getByText("Could not save date")).toBeVisible();
+  });
+
+  it("allows read-only inspection but disables expiry editing", async () => {
+    const user = userEvent.setup();
+    mockAccounts([account({ subscriptionExpiresAt: "2026-01-31T12:00:00Z" })]);
+    useAuthStore.setState({ canWrite: false });
+    render(<MemoryRouter><AccountsPage /></MemoryRouter>);
+    await user.click(screen.getByRole("button", { name: "View details" }));
+    const dialog = screen.getByRole("dialog", { name: "Account details" });
+    expect(within(dialog).getByLabelText("Subscription expiry")).toBeDisabled();
+    expect(within(dialog).getByText("30 days")).toBeVisible();
+    expect(within(dialog).getByRole("button", { name: /^Delete$/ })).toBeDisabled();
+  });
+
+  it("closes when the inspected account disappears without showing a different account", async () => {
+    const user = userEvent.setup();
+    const first = account({ accountId: "acc-one", displayName: "First account" });
+    const second = account({ accountId: "acc-two", displayName: "Second account" });
+    mockAccounts([first, second]);
+    const { rerender } = render(<MemoryRouter><AccountsPage /></MemoryRouter>);
+    await user.click(screen.getAllByRole("button", { name: "View details" })[1]!);
+    mockAccounts([first]);
+    rerender(<MemoryRouter><AccountsPage /></MemoryRouter>);
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Accounts" })).toHaveFocus());
+    expect(screen.getAllByRole("button", { name: "View details" })).toHaveLength(1);
+    mockAccounts([first, second]);
+    rerender(<MemoryRouter><AccountsPage /></MemoryRouter>);
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
 });

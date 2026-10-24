@@ -136,6 +136,8 @@ def _dashboard_settings_response(settings) -> DashboardSettingsResponse:
         upstream_proxy_default_pool_id=settings.upstream_proxy_default_pool_id,
         prefer_earlier_reset_accounts=settings.prefer_earlier_reset_accounts,
         prefer_earlier_reset_window=settings.prefer_earlier_reset_window,
+        prefer_subscription_expiry_accounts=settings.prefer_subscription_expiry_accounts,
+        subscription_expiry_window_days=settings.subscription_expiry_window_days,
         show_reset_credit_badges=settings.show_reset_credit_badges,
         auto_redeem_reset_credits_before_expiry=settings.auto_redeem_reset_credits_before_expiry,
         show_reset_credit_expiry_badge=settings.show_reset_credit_expiry_badge,
@@ -689,6 +691,16 @@ async def update_settings(
                     else current.prefer_earlier_reset_accounts
                 ),
                 prefer_earlier_reset_window=payload.prefer_earlier_reset_window or current.prefer_earlier_reset_window,
+                prefer_subscription_expiry_accounts=(
+                    payload.prefer_subscription_expiry_accounts
+                    if payload.prefer_subscription_expiry_accounts is not None
+                    else current.prefer_subscription_expiry_accounts
+                ),
+                subscription_expiry_window_days=(
+                    payload.subscription_expiry_window_days
+                    if payload.subscription_expiry_window_days is not None
+                    else current.subscription_expiry_window_days
+                ),
                 show_reset_credit_badges=(
                     payload.show_reset_credit_badges
                     if payload.show_reset_credit_badges is not None
@@ -870,6 +882,8 @@ async def update_settings(
             "upstream_proxy_default_pool_id",
             "prefer_earlier_reset_accounts",
             "prefer_earlier_reset_window",
+            "prefer_subscription_expiry_accounts",
+            "subscription_expiry_window_days",
             "show_reset_credit_badges",
             "auto_redeem_reset_credits_before_expiry",
             "show_reset_credit_expiry_badge",

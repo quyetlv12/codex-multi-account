@@ -183,6 +183,8 @@ class StickySelectionOwner(Protocol):
         secondary_budget_threshold_pct: float,
         prefer_earlier_reset_accounts: bool,
         prefer_earlier_reset_window: ResetPreferenceWindow,
+        prefer_subscription_expiry: bool = False,
+        subscription_expiry_window_days: int = 7,
         routing_strategy: RoutingStrategy,
         relative_availability_power: float,
         relative_availability_top_k: int,
@@ -219,6 +221,8 @@ class StickySelectionRequest(Generic[SelectionInputsT]):
     sticky_max_age_seconds: int | None
     prefer_earlier_reset_accounts: bool
     prefer_earlier_reset_window: ResetPreferenceWindow
+    prefer_subscription_expiry: bool
+    subscription_expiry_window_days: int
     routing_strategy: RoutingStrategy
     relative_availability_power: float
     relative_availability_top_k: int
@@ -296,6 +300,8 @@ async def run_sticky_selection_path(
     sticky_max_age_seconds = request.sticky_max_age_seconds
     prefer_earlier_reset_accounts = request.prefer_earlier_reset_accounts
     prefer_earlier_reset_window = request.prefer_earlier_reset_window
+    prefer_subscription_expiry = request.prefer_subscription_expiry
+    subscription_expiry_window_days = request.subscription_expiry_window_days
     routing_strategy = request.routing_strategy
     relative_availability_power = request.relative_availability_power
     relative_availability_top_k = request.relative_availability_top_k
@@ -671,6 +677,8 @@ async def run_sticky_selection_path(
                         secondary_budget_threshold_pct=secondary_budget_threshold_pct,
                         prefer_earlier_reset_accounts=prefer_earlier_reset_accounts,
                         prefer_earlier_reset_window=prefer_earlier_reset_window,
+                        prefer_subscription_expiry=prefer_subscription_expiry,
+                        subscription_expiry_window_days=subscription_expiry_window_days,
                         routing_strategy=routing_strategy,
                         relative_availability_power=relative_availability_power,
                         relative_availability_top_k=relative_availability_top_k,
@@ -1156,6 +1164,8 @@ async def _select_with_stickiness(
     secondary_budget_threshold_pct: float = 100.0,
     prefer_earlier_reset_accounts: bool,
     prefer_earlier_reset_window: ResetPreferenceWindow,
+    prefer_subscription_expiry: bool = False,
+    subscription_expiry_window_days: int = 7,
     routing_strategy: RoutingStrategy,
     relative_availability_power: float = 2.0,
     relative_availability_top_k: int = 5,
@@ -1176,6 +1186,8 @@ async def _select_with_stickiness(
                 states,
                 prefer_earlier_reset=prefer_earlier_reset_accounts,
                 prefer_earlier_reset_window=prefer_earlier_reset_window,
+                prefer_subscription_expiry=prefer_subscription_expiry,
+                subscription_expiry_window_days=subscription_expiry_window_days,
                 routing_strategy=routing_strategy,
                 relative_availability_power=relative_availability_power,
                 relative_availability_top_k=relative_availability_top_k,
@@ -1347,6 +1359,8 @@ async def _select_with_stickiness(
                         states,
                         prefer_earlier_reset=prefer_earlier_reset_accounts,
                         prefer_earlier_reset_window=prefer_earlier_reset_window,
+                        prefer_subscription_expiry=prefer_subscription_expiry,
+                        subscription_expiry_window_days=subscription_expiry_window_days,
                         routing_strategy=routing_strategy,
                         relative_availability_power=relative_availability_power,
                         relative_availability_top_k=relative_availability_top_k,
@@ -1438,6 +1452,8 @@ async def _select_with_stickiness(
         states,
         prefer_earlier_reset=prefer_earlier_reset_accounts,
         prefer_earlier_reset_window=prefer_earlier_reset_window,
+        prefer_subscription_expiry=prefer_subscription_expiry,
+        subscription_expiry_window_days=subscription_expiry_window_days,
         routing_strategy=routing_strategy,
         relative_availability_power=relative_availability_power,
         relative_availability_top_k=relative_availability_top_k,
@@ -1683,6 +1699,8 @@ def _select_account_preferring_budget_safe(
     *,
     prefer_earlier_reset: bool,
     prefer_earlier_reset_window: ResetPreferenceWindow = "secondary",
+    prefer_subscription_expiry: bool = False,
+    subscription_expiry_window_days: int = 7,
     routing_strategy: RoutingStrategy,
     relative_availability_power: float = 2.0,
     relative_availability_top_k: int = 5,
@@ -1705,6 +1723,8 @@ def _select_account_preferring_budget_safe(
             state_list,
             prefer_earlier_reset=prefer_earlier_reset,
             prefer_earlier_reset_window=prefer_earlier_reset_window,
+            prefer_subscription_expiry=prefer_subscription_expiry,
+            subscription_expiry_window_days=subscription_expiry_window_days,
             routing_strategy=routing_strategy,
             allow_backoff_fallback=allow_backoff_fallback,
             deterministic_probe=deterministic_probe,
@@ -1739,6 +1759,8 @@ def _select_account_preferring_budget_safe(
             budget_safe_states or state_list,
             prefer_earlier_reset=prefer_earlier_reset,
             prefer_earlier_reset_window=prefer_earlier_reset_window,
+            prefer_subscription_expiry=prefer_subscription_expiry,
+            subscription_expiry_window_days=subscription_expiry_window_days,
             routing_strategy=routing_strategy,
             allow_backoff_fallback=allow_backoff_fallback,
             deterministic_probe=deterministic_probe,
@@ -1758,6 +1780,8 @@ def _select_account_preferring_budget_safe(
             burn_first_states,
             prefer_earlier_reset=prefer_earlier_reset,
             prefer_earlier_reset_window=prefer_earlier_reset_window,
+            prefer_subscription_expiry=prefer_subscription_expiry,
+            subscription_expiry_window_days=subscription_expiry_window_days,
             routing_strategy=routing_strategy,
             allow_backoff_fallback=False,
             deterministic_probe=deterministic_probe,
@@ -1783,6 +1807,8 @@ def _select_account_preferring_budget_safe(
             selection_pool,
             prefer_earlier_reset=prefer_earlier_reset,
             prefer_earlier_reset_window=prefer_earlier_reset_window,
+            prefer_subscription_expiry=prefer_subscription_expiry,
+            subscription_expiry_window_days=subscription_expiry_window_days,
             routing_strategy=routing_strategy,
             allow_backoff_fallback=allow_backoff_fallback,
             deterministic_probe=deterministic_probe,
@@ -1803,6 +1829,8 @@ def _select_account_preferring_budget_safe(
             state_list,
             prefer_earlier_reset=prefer_earlier_reset,
             prefer_earlier_reset_window=prefer_earlier_reset_window,
+            prefer_subscription_expiry=prefer_subscription_expiry,
+            subscription_expiry_window_days=subscription_expiry_window_days,
             routing_strategy=routing_strategy,
             allow_backoff_fallback=allow_backoff_fallback,
             deterministic_probe=deterministic_probe,
@@ -1817,6 +1845,8 @@ def _select_account_preferring_budget_safe(
         state_list,
         prefer_earlier_reset=prefer_earlier_reset,
         prefer_earlier_reset_window=prefer_earlier_reset_window,
+        prefer_subscription_expiry=prefer_subscription_expiry,
+        subscription_expiry_window_days=subscription_expiry_window_days,
         routing_strategy=routing_strategy,
         allow_backoff_fallback=allow_backoff_fallback,
         deterministic_probe=deterministic_probe,

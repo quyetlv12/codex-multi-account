@@ -263,6 +263,11 @@ def _account_to_summary(
         workspace_label=account.workspace_label,
         seat_type=account.seat_type,
         plan_type=plan_type,
+        subscription_expires_at=(
+            account.subscription_expires_at.replace(tzinfo=timezone.utc)
+            if account.subscription_expires_at is not None and account.subscription_expires_at.tzinfo is None
+            else account.subscription_expires_at
+        ),
         status=effective_status.value,
         routing_policy=_normalize_account_routing_policy(account.routing_policy),
         security_work_authorized=bool(account.security_work_authorized),

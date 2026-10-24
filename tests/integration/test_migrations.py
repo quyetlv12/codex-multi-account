@@ -92,6 +92,15 @@ async def test_run_startup_migrations_preserves_unknown_plan_types(db_setup):
         assert acc_one.plan_type == "education"
         assert acc_two.plan_type == "pro"
         assert acc_three.plan_type == DEFAULT_PLAN
+        settings_row = await session.execute(
+            text(
+                "SELECT prefer_subscription_expiry_accounts, subscription_expiry_window_days "
+                "FROM dashboard_settings WHERE id = 1"
+            )
+        )
+        expiry_enabled, expiry_window = settings_row.one()
+        assert expiry_enabled in (False, 0)
+        assert expiry_window == 7
 
     rerun = await run_startup_migrations(_DATABASE_URL)
     assert rerun.current_revision == _HEAD_REVISION

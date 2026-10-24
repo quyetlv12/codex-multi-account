@@ -1,0 +1,6 @@
+- [x] Add the ORM fields and Alembic migration with upgrade/downgrade coverage.
+- [x] Thread account expiry through persistence, account API/schema/mapper, and dashboard editing.
+- [x] Thread opt-in expiry settings through settings persistence/API/UI with default off and 7 days.
+- [x] Apply expiry ranking in canonical routing while preserving explicit single-account and hard continuation affinity.
+- [x] Add migration, persistence/API, routing, and focused UI checks.
+- [x] Run backend/frontend checks and review the final diff. OpenSpec CLI validation is unavailable in this checkout.

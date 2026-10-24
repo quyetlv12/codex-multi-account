@@ -99,6 +99,8 @@ class Account(Base):
     workspace_label: Mapped[str | None] = mapped_column(String, nullable=True)
     seat_type: Mapped[str | None] = mapped_column(String, nullable=True)
     plan_type: Mapped[str] = mapped_column(String, nullable=False)
+    # Operator-managed package expiry; independent from quota reset/token expiry.
+    subscription_expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     routing_policy: Mapped[str] = mapped_column(
         String,
         default="normal",
@@ -871,6 +873,12 @@ class DashboardSettings(Base):
     )
     prefer_earlier_reset_accounts: Mapped[bool] = mapped_column(
         Boolean, default=True, server_default=true(), nullable=False
+    )
+    prefer_subscription_expiry_accounts: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=false(), nullable=False
+    )
+    subscription_expiry_window_days: Mapped[int] = mapped_column(
+        Integer, default=7, server_default=text("7"), nullable=False
     )
     prefer_earlier_reset_window: Mapped[str] = mapped_column(
         String,

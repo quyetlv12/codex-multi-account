@@ -97,6 +97,7 @@ type RoutingSettingsDraft = {
   relativeAvailabilityTopK: string;
   stickyPrimaryThreshold: string;
   stickySecondaryThreshold: string;
+  subscriptionExpiryWindowDays: string;
   limitWarmupModel: string;
   limitWarmupPrompt: string;
   limitWarmupCooldown: string;
@@ -118,6 +119,7 @@ function createRoutingSettingsDraft(settings: DashboardSettings): RoutingSetting
     relativeAvailabilityTopK: String(settings.relativeAvailabilityTopK),
     stickyPrimaryThreshold: String(settings.stickyReallocationPrimaryBudgetThresholdPct ?? 95),
     stickySecondaryThreshold: String(settings.stickyReallocationSecondaryBudgetThresholdPct ?? 100),
+    subscriptionExpiryWindowDays: String(settings.subscriptionExpiryWindowDays ?? 7),
     limitWarmupModel: settings.limitWarmupModel,
     limitWarmupPrompt: settings.limitWarmupPrompt,
     limitWarmupCooldown: String(settings.limitWarmupCooldownSeconds),
@@ -954,6 +956,54 @@ export function RoutingSettings({
                 checked={settings.preferEarlierResetAccounts}
                 disabled={busy}
                 onCheckedChange={(checked) => save({ preferEarlierResetAccounts: checked })}
+              />
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-medium">{t("settings.routing.subscriptionExpiry.label")}</p>
+              <p className="text-xs text-muted-foreground">{t("settings.routing.subscriptionExpiry.description")}</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <Input
+                type="number"
+                min={1}
+                max={365}
+                aria-label={t("settings.routing.subscriptionExpiry.windowAria")}
+                className="h-8 w-24 text-xs"
+                value={draft.subscriptionExpiryWindowDays}
+                disabled={busy || !settings.preferSubscriptionExpiryAccounts}
+                onChange={(event) => updateDraft({ subscriptionExpiryWindowDays: event.target.value })}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    const value = Number.parseInt(draft.subscriptionExpiryWindowDays, 10);
+                    if (Number.isInteger(value) && value >= 1 && value <= 365) {
+                      void save({ subscriptionExpiryWindowDays: value });
+                    }
+                  }
+                }}
+              />
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-8 text-xs"
+                disabled={busy || !settings.preferSubscriptionExpiryAccounts}
+                onClick={() => {
+                  const value = Number.parseInt(draft.subscriptionExpiryWindowDays, 10);
+                  if (Number.isInteger(value) && value >= 1 && value <= 365) {
+                    void save({ subscriptionExpiryWindowDays: value });
+                  }
+                }}
+              >
+                {t("settings.routing.subscriptionExpiry.save")}
+              </Button>
+              <Switch
+                aria-label={t("settings.routing.subscriptionExpiry.ariaLabel")}
+                checked={settings.preferSubscriptionExpiryAccounts}
+                disabled={busy}
+                onCheckedChange={(checked) => save({ preferSubscriptionExpiryAccounts: checked })}
               />
             </div>
           </div>

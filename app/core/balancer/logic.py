@@ -128,6 +128,7 @@ class AccountState:
     error_count: int = 0
     deactivation_reason: str | None = None
     plan_type: str | None = None
+    subscription_expires_at: float | None = None
     capacity_credits: float | None = None
     health_tier: int = 0
     priority_used_percent: float | None = None
@@ -450,6 +451,8 @@ def select_account(
     *,
     prefer_earlier_reset: bool = False,
     prefer_earlier_reset_window: ResetPreferenceWindow = "secondary",
+    prefer_subscription_expiry: bool = False,
+    subscription_expiry_window_days: int = 7,
     routing_strategy: RoutingStrategy = "capacity_weighted",
     allow_backoff_fallback: bool = True,
     deterministic_probe: bool = False,
@@ -484,6 +487,9 @@ def select_account(
             (``"primary"`` for short window or ``"secondary"`` for weekly),
             with the other window used as fallback when the configured reset is
             unavailable.
+        prefer_subscription_expiry: Whether to prioritize operator-managed
+            Plus/Pro package expiries within the configured day window.
+        subscription_expiry_window_days: Maximum days until package expiry.
         routing_strategy: Balancing strategy used to pick from the effective
             pool (``"capacity_weighted"``, ``"sequential_drain"``,
             ``"reset_drain"``, ``"single_account"``, ``"relative_availability"``,
@@ -692,6 +698,24 @@ def select_account(
 
     round_robin_salt = _effective_replica_salt(replica_salt)
 
+    def _prefer_subscription_expiry_candidates(pool: list[AccountState]) -> list[AccountState]:
+        if not prefer_subscription_expiry:
+            return pool
+        horizon = max(1, subscription_expiry_window_days) * SECONDS_PER_DAY
+        candidates = [
+            state
+            for state in pool
+            if (state.plan_type or "").strip().lower() in {"plus", "pro"}
+            and state.subscription_expires_at is not None
+            and 0 <= state.subscription_expires_at - current <= horizon
+        ]
+        if not candidates:
+            return pool
+        nearest = min(
+            state.subscription_expires_at for state in candidates if state.subscription_expires_at is not None
+        )
+        return [state for state in candidates if state.subscription_expires_at == nearest]
+
     def _round_robin_sort_key(state: AccountState) -> tuple[float, float, str]:
         # Primary ordering: lowest planner cost, then least-recently-selected.
         # The final tie-break is decorrelated per replica (keyed hash of the
@@ -708,11 +732,14 @@ def select_account(
         return SelectionResult(selected, None)
 
     if routing_strategy == "sequential_drain":
-        selected = min(available, key=_sequential_drain_sort_key)
+        selected = min(_prefer_subscription_expiry_candidates(available), key=_sequential_drain_sort_key)
         return SelectionResult(selected, None)
 
     if routing_strategy == "reset_drain":
-        selected = min(available, key=lambda state: _reset_drain_sort_key(state, current))
+        selected = min(
+            _prefer_subscription_expiry_candidates(available),
+            key=lambda state: _reset_drain_sort_key(state, current),
+        )
         return SelectionResult(selected, None)
 
     healthy = [s for s in available if s.health_tier == HEALTH_TIER_HEALTHY]
@@ -729,6 +756,7 @@ def select_account(
     normal = [s for s in health_pool if _routing_policy(s) == ROUTING_POLICY_NORMAL]
     preserve = [s for s in health_pool if _routing_policy(s) == ROUTING_POLICY_PRESERVE]
     effective_pool = burn_first or normal or preserve or health_pool
+    effective_pool = _prefer_subscription_expiry_candidates(effective_pool)
     effective_prefer_earlier_reset = prefer_earlier_reset and routing_strategy != "relative_availability"
 
     if routing_strategy == "round_robin":

@@ -84,6 +84,18 @@ describe("formatters", () => {
     }
   });
 
+  it("uses Vietnamese number and date conventions while keeping compact units and USD", async () => {
+    await i18n.changeLanguage("vi");
+    try {
+      expect(formatNumber(1234)).toBe("1.234");
+      expect(formatTimeLong("2026-01-01T00:00:00.000Z").date).toBe("01/01/2026");
+      expect(formatCompactNumber(1_500_000)).toBe("1.5M");
+      expect(formatCurrency(12)).toBe("$12.00");
+    } finally {
+      await i18n.changeLanguage("en");
+    }
+  });
+
   it("formats percent and rate values", () => {
     expect(formatPercent(49.6)).toBe("50%");
     expect(formatPercent(null)).toBe("0%");

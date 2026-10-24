@@ -17,6 +17,36 @@ describe("AccountList", () => {
     vi.restoreAllMocks();
   });
 
+  it("switches to card view and renders the filtered accounts through the card renderer", async () => {
+    const user = userEvent.setup();
+    const onViewModeChange = vi.fn();
+    render(
+      <AccountList
+        accounts={[{
+          accountId: "acc-card",
+          email: "card@example.com",
+          displayName: "Card account",
+          planType: "plus",
+          status: "active",
+          limitWarmupEnabled: false,
+          additionalQuotas: [],
+        }]}
+        selectedAccountId={null}
+        onSelect={vi.fn()}
+        onOpenImport={() => {}}
+        onOpenOauth={() => {}}
+        viewMode="cards"
+        onViewModeChange={onViewModeChange}
+        renderAccountCard={(account) => <div data-testid="account-card">{account.displayName}</div>}
+      />,
+    );
+
+    expect(screen.getByTestId("account-card")).toHaveTextContent("Card account");
+    expect(screen.getByRole("button", { name: "View accounts as cards" })).toHaveAttribute("aria-pressed", "true");
+    await user.click(screen.getByRole("button", { name: "View accounts as a list" }));
+    expect(onViewModeChange).toHaveBeenCalledWith("list");
+  });
+
   it("renders items and filters by search", async () => {
     const user = userEvent.setup();
     const onSelect = vi.fn();

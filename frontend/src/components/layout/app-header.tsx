@@ -1,11 +1,15 @@
 import { useQuery } from "@tanstack/react-query";
-import { ChevronDown, Eye, EyeOff, LogIn, LogOut, Menu } from "lucide-react";
+import {
+  BarChart3, ChevronDown, Eye, EyeOff, KeyRound, LayoutDashboard,
+  LogIn, LogOut, Menu, Settings2, SlidersHorizontal, UsersRound, Workflow,
+} from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, NavLink, useLocation } from "react-router-dom";
 
 import { CodexLogo } from "@/components/brand/codex-logo";
 import { LanguageToggle, LanguageToggleMobile } from "@/components/layout/language-toggle";
+import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -20,15 +24,15 @@ import { usePrivacyStore } from "@/hooks/use-privacy";
 import { cn } from "@/lib/utils";
 
 const CORE_NAV_ITEMS = [
-  { to: "/dashboard", labelKey: "nav.dashboard" },
-  { to: "/reports", labelKey: "nav.reports" },
-  { to: "/accounts", labelKey: "nav.accounts" },
-  { to: "/apis", labelKey: "nav.apis" },
-  { to: "/settings", labelKey: "nav.settings" },
+  { to: "/dashboard", labelKey: "nav.dashboard", icon: LayoutDashboard },
+  { to: "/reports", labelKey: "nav.reports", icon: BarChart3 },
+  { to: "/accounts", labelKey: "nav.accounts", icon: UsersRound },
+  { to: "/apis", labelKey: "nav.apis", icon: KeyRound },
+  { to: "/settings", labelKey: "nav.settings", icon: Settings2 },
 ] as const;
 
 const ADVANCED_NAV_ITEMS = [
-  { to: "/automations", labelKey: "nav.automations" },
+  { to: "/automations", labelKey: "nav.automations", icon: Workflow },
 ] as const;
 
 export type AppHeaderProps = {
@@ -88,7 +92,7 @@ export function AppHeader({
         className,
       )}
     >
-      <div className="mx-auto flex w-full max-w-[1500px] items-center justify-between gap-4">
+      <div className="flex w-full items-center justify-between gap-4">
         {/* Brand */}
         <Link
           to="/dashboard"
@@ -103,7 +107,7 @@ export function AppHeader({
         </Link>
 
         {/* Desktop nav pills */}
-        <nav className="hidden items-center rounded-lg border border-border/50 bg-muted/40 p-0.5 sm:flex">
+        <nav className="hidden shrink-0 items-center rounded-lg border border-border/50 bg-muted/40 p-0.5 xl:flex">
           {CORE_NAV_ITEMS.map((item) => (
             <NavLink
               key={item.to}
@@ -117,7 +121,8 @@ export function AppHeader({
                 )
               }
             >
-              <span className="relative inline-flex items-center">
+              <span className="relative inline-flex items-center gap-2 whitespace-nowrap">
+                <item.icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                 {t(item.labelKey)}
                 {item.to === "/accounts" && accountsResetBadge ? (
                   <span className="absolute -top-2 -right-4 z-10 grid h-4 min-w-[1rem] place-items-center rounded-full bg-primary px-1 text-[10px] font-medium text-primary-foreground">
@@ -131,12 +136,13 @@ export function AppHeader({
             <DropdownMenuTrigger
               data-active={advancedActive}
               className={cn(
-                "relative inline-flex h-7 items-center gap-1 rounded-md px-3.5 text-xs leading-none font-medium transition-colors duration-200",
+                "relative inline-flex h-7 items-center gap-2 whitespace-nowrap rounded-md px-3.5 text-xs leading-none font-medium transition-colors duration-200",
                 advancedActive
                   ? "bg-background text-foreground shadow-[var(--shadow-xs)]"
                   : "text-muted-foreground hover:text-foreground",
               )}
             >
+              <SlidersHorizontal className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
               {t("nav.advanced")}
               <ChevronDown className="h-3 w-3" aria-hidden="true" />
             </DropdownMenuTrigger>
@@ -144,6 +150,7 @@ export function AppHeader({
               {ADVANCED_NAV_ITEMS.map((item) => (
                 <DropdownMenuItem key={item.to} asChild>
                   <NavLink to={item.to} className="cursor-pointer">
+                    <item.icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                     {t(item.labelKey)}
                   </NavLink>
                 </DropdownMenuItem>
@@ -154,6 +161,7 @@ export function AppHeader({
 
         {/* Actions */}
         <div className="flex flex-1 items-center justify-end gap-1.5">
+          <ThemeToggle />
           <LanguageToggle />
           <Button
             type="button"
@@ -161,7 +169,7 @@ export function AppHeader({
             variant="ghost"
             onClick={togglePrivacy}
             aria-label={privacyLabel}
-            className="press-scale hidden h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground sm:inline-flex"
+            className="press-scale hidden h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground xl:inline-flex"
           >
             <PrivacyIcon className="h-3.5 w-3.5" aria-hidden="true" />
           </Button>
@@ -171,7 +179,7 @@ export function AppHeader({
               size="sm"
               variant="ghost"
               onClick={onLogout}
-              className="press-scale hidden h-8 gap-1.5 rounded-lg text-xs text-muted-foreground hover:text-foreground sm:inline-flex"
+              className="press-scale hidden h-8 gap-1.5 rounded-lg text-xs text-muted-foreground hover:text-foreground xl:inline-flex"
             >
               <LogOut className="h-3.5 w-3.5" aria-hidden="true" />
               {t("common.logout")}
@@ -183,7 +191,7 @@ export function AppHeader({
               size="sm"
               variant="outline"
               onClick={onAdminLogin}
-              className="press-scale hidden h-8 gap-1.5 rounded-lg text-xs sm:inline-flex"
+              className="press-scale hidden h-8 gap-1.5 rounded-lg text-xs xl:inline-flex"
             >
               <LogIn className="h-3.5 w-3.5" aria-hidden="true" />
               {t("nav.adminSignIn")}
@@ -193,7 +201,7 @@ export function AppHeader({
           {/* Mobile menu */}
           <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
             <SheetTrigger asChild>
-              <Button type="button" size="icon" variant="ghost" aria-label={t("nav.openMenu")} className="h-8 w-8 rounded-lg sm:hidden">
+              <Button type="button" size="icon" variant="ghost" aria-label={t("nav.openMenu")} className="h-8 w-8 rounded-lg xl:hidden">
                 <Menu className="h-4 w-4" />
               </Button>
             </SheetTrigger>
@@ -212,12 +220,13 @@ export function AppHeader({
                     {({ isActive }) => (
                       <span
                         className={cn(
-                          "relative block w-full rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors",
+                          "relative flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors",
                           isActive
                             ? "bg-primary/10 text-primary"
                             : "text-muted-foreground hover:bg-muted hover:text-foreground",
                         )}
                       >
+                        <item.icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                         {t(item.labelKey)}
                         {item.to === "/accounts" && accountsResetBadge ? (
                           <span className="absolute right-2 top-1 z-10 grid h-5 min-w-[1.25rem] place-items-center rounded-full bg-primary px-1 text-[10px] font-medium text-primary-foreground">
@@ -237,12 +246,13 @@ export function AppHeader({
                     {({ isActive }) => (
                       <span
                         className={cn(
-                          "relative block w-full rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors",
+                          "relative flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors",
                           isActive
                             ? "bg-primary/10 text-primary"
                             : "text-muted-foreground hover:bg-muted hover:text-foreground",
                         )}
                       >
+                        <item.icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                         {t(item.labelKey)}
                       </span>
                     )}

@@ -11,6 +11,8 @@ import { AccountActions } from "@/features/accounts/components/account-actions";
 import { AccountProxyBinding } from "@/features/accounts/components/account-proxy-binding";
 import { AccountTokenInfo } from "@/features/accounts/components/account-token-info";
 import { AccountUsagePanel } from "@/features/accounts/components/account-usage-panel";
+import { SubscriptionExpirySummary } from "@/features/accounts/components/subscription-expiry-summary";
+import { PlanBadge } from "@/components/plan-badge";
 import type {
   AccountRoutingPolicy,
   AccountSummary,
@@ -26,6 +28,7 @@ import { formatCompactAccountId } from "@/utils/account-identifiers";
 import { formatSlug } from "@/utils/formatters";
 
 export type AccountDetailProps = {
+  className?: string;
   account: AccountSummary | null;
   showAccountId?: boolean;
   busy: boolean;
@@ -46,6 +49,7 @@ export type AccountDetailProps = {
     routingPolicy: AccountRoutingPolicy,
   ) => void;
   onSecurityWorkAuthorizedChange: (accountId: string, enabled: boolean) => void;
+  onSubscriptionExpiryChange?: (accountId: string, value: string | null) => void;
   upstreamProxyAdmin?: UpstreamProxyAdmin | null;
   onProxyBindingSave?: (accountId: string, payload: AccountProxyBindingRequest) => Promise<unknown>;
   onProxyEndpointTest?: (endpointId: string) => Promise<UpstreamProxyEndpointTestResponse>;
@@ -55,6 +59,7 @@ export type AccountDetailProps = {
 };
 
 export function AccountDetail({
+  className,
   account,
   showAccountId = false,
   busy,
@@ -72,6 +77,7 @@ export function AccountDetail({
   onLimitWarmupChange,
   onRoutingPolicyChange,
   onSecurityWorkAuthorizedChange,
+  onSubscriptionExpiryChange = () => undefined,
   upstreamProxyAdmin = null,
   onProxyBindingSave,
   onProxyEndpointTest,
@@ -118,7 +124,7 @@ export function AccountDetail({
   return (
     <div
       key={account.accountId}
-      className="animate-fade-in-up min-w-0 space-y-4 rounded-xl border bg-card p-4 sm:p-5"
+      className={cn("animate-fade-in-up min-w-0 space-y-4 rounded-xl border bg-card p-4 sm:p-5", className)}
     >
       {/* Account header */}
       <div>
@@ -136,7 +142,7 @@ export function AccountDetail({
         />
         {emailSubtitle ? (
           <p
-            className="mt-0.5 text-xs text-muted-foreground"
+            className="mt-0.5 break-all text-xs text-muted-foreground"
             title={
               showAccountId ? t("accounts.detail.accountIdTitle", { accountId: account.accountId }) : undefined
             }
@@ -147,9 +153,17 @@ export function AccountDetail({
             {showAccountId ? ` | ID ${compactId}` : ""}
           </p>
         ) : null}
-        <p className="mt-0.5 text-xs text-muted-foreground">
-          {workspaceLabel} | {formatSlug(account.planType)}{seatLabel}
+        <p className="mt-0.5 break-all text-xs text-muted-foreground">
+          {workspaceLabel} | <PlanBadge planType={account.planType} />{seatLabel}
         </p>
+        <SubscriptionExpiryField
+          key={`${account.accountId}:${account.subscriptionExpiresAt ?? ""}`}
+          accountId={account.accountId}
+          value={account.subscriptionExpiresAt ?? null}
+          busy={busy}
+          readOnly={readOnly}
+          onSave={onSubscriptionExpiryChange}
+        />
       </div>
 
       {onProxyBindingSave ? (
@@ -188,6 +202,65 @@ export function AccountDetail({
         onRoutingPolicyChange={onRoutingPolicyChange}
         onSecurityWorkAuthorizedChange={onSecurityWorkAuthorizedChange}
       />
+    </div>
+  );
+}
+
+type SubscriptionExpiryFieldProps = {
+  accountId: string;
+  value: string | null;
+  busy: boolean;
+  readOnly: boolean;
+  onSave: (accountId: string, value: string | null) => void;
+};
+
+function SubscriptionExpiryField({ accountId, value, busy, readOnly, onSave }: SubscriptionExpiryFieldProps) {
+  const { t } = useTranslation();
+  const normalizedValue = value ? value.slice(0, 10) : "";
+  const [draft, setDraft] = useState(normalizedValue);
+  const changed = draft !== normalizedValue;
+
+  return (
+    <div className="mt-4 space-y-3">
+      <SubscriptionExpirySummary value={value} />
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-xs font-medium">{t("accounts.detail.subscriptionExpiryLabel")}</p>
+          <p className="text-[11px] text-muted-foreground">{t("accounts.detail.subscriptionExpiryHelp")}</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Input
+            type="date"
+            aria-label={t("accounts.detail.subscriptionExpiryLabel")}
+            className="h-8 w-36 text-xs"
+            value={draft}
+            disabled={busy || readOnly}
+            onChange={(event) => setDraft(event.target.value)}
+          />
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-8 text-xs"
+            disabled={busy || readOnly || !changed}
+            onClick={() => onSave(accountId, draft ? `${draft}T23:59:59+00:00` : null)}
+          >
+            {t("common.save")}
+          </Button>
+          {draft ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="h-8 text-xs"
+              disabled={busy || readOnly}
+              onClick={() => setDraft("")}
+            >
+              {t("accounts.detail.clearSubscriptionExpiry")}
+            </Button>
+          ) : null}
+        </div>
+      </div>
     </div>
   );
 }
@@ -250,6 +323,7 @@ function AccountNameField({
                 void handleSave();
               } else if (event.key === "Escape") {
                 event.preventDefault();
+                event.stopPropagation();
                 handleCancel();
               }
             }}

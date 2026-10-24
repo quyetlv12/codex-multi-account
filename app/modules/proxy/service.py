@@ -1712,6 +1712,8 @@ class ProxyService(
         sticky_max_age_seconds: int | None = None,
         prefer_earlier_reset_accounts: bool = False,
         prefer_earlier_reset_window: ResetPreferenceWindow = "secondary",
+        prefer_subscription_expiry: bool | None = None,
+        subscription_expiry_window_days: int | None = None,
         routing_strategy: RoutingStrategy = "capacity_weighted",
         model: str | None = None,
         service_tier: str | None = None,
@@ -1772,6 +1774,10 @@ class ProxyService(
         try:
             with anyio.fail_after(remaining_budget):
                 settings = await get_settings_cache().get()
+                if prefer_subscription_expiry is None:
+                    prefer_subscription_expiry = settings.prefer_subscription_expiry_accounts
+                if subscription_expiry_window_days is None:
+                    subscription_expiry_window_days = settings.subscription_expiry_window_days
                 concurrency_caps = effective_account_concurrency_caps(settings)
                 stream_reserve_slots = (
                     (
@@ -1872,6 +1878,8 @@ class ProxyService(
                         abandon_unavailable_legacy_owner=abandon_unavailable_legacy_owner,
                         prefer_earlier_reset_accounts=prefer_earlier_reset_accounts,
                         prefer_earlier_reset_window=prefer_earlier_reset_window,
+                        prefer_subscription_expiry=prefer_subscription_expiry,
+                        subscription_expiry_window_days=subscription_expiry_window_days or 7,
                         routing_strategy=routing_strategy,
                         relative_availability_power=_relative_availability_power(settings),
                         relative_availability_top_k=_relative_availability_top_k(settings),
@@ -1940,6 +1948,8 @@ class ProxyService(
                     sticky_max_age_seconds=sticky_max_age_seconds,
                     prefer_earlier_reset_accounts=prefer_earlier_reset_accounts,
                     prefer_earlier_reset_window=prefer_earlier_reset_window,
+                    prefer_subscription_expiry=prefer_subscription_expiry,
+                    subscription_expiry_window_days=subscription_expiry_window_days or 7,
                     routing_strategy=routing_strategy,
                     relative_availability_power=_relative_availability_power(settings),
                     relative_availability_top_k=_relative_availability_top_k(settings),
@@ -2059,6 +2069,8 @@ class ProxyService(
             account_ids=scoped_account_ids,
             prefer_earlier_reset_accounts=settings.prefer_earlier_reset_accounts,
             prefer_earlier_reset_window=_prefer_earlier_reset_window(settings),
+            prefer_subscription_expiry=settings.prefer_subscription_expiry_accounts,
+            subscription_expiry_window_days=settings.subscription_expiry_window_days,
             routing_strategy=_routing_strategy(settings),
             budget_threshold_pct=_sticky_reallocation_primary_budget_threshold_pct(settings),
             secondary_budget_threshold_pct=_sticky_reallocation_secondary_budget_threshold_pct(settings),

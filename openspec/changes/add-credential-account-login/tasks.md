@@ -1,0 +1,6 @@
+- [x] Add bounded credential parser and redacted login bridge.
+- [x] Add authenticated API and encrypted account import integration.
+- [x] Add dashboard paste action while preserving auth.json upload.
+- [x] Add parser and helper-contract tests.
+- [x] Add service/helper contract coverage for partial results; existing account API regression covers dashboard write dependency wiring.
+- [x] Run backend/frontend verification and review the final diff; live login remains intentionally unverified.

@@ -1,4 +1,5 @@
-import { ChevronDown, ChevronUp, Plus, Search } from "lucide-react";
+import { ChevronDown, ChevronUp, LayoutGrid, List, Plus, Search } from "lucide-react";
+import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -32,10 +33,14 @@ export type AccountListProps = {
   onSelect: (accountId: string) => void;
   onOpenImport: () => void;
   onOpenOauth: () => void;
+  onOpenAutoLogin?: () => void;
   sortMode?: AccountSortMode;
   onSortModeChange?: (sortMode: AccountSortMode) => void;
   showResetCreditBadges?: boolean;
   readOnly?: boolean;
+  viewMode?: "list" | "cards";
+  onViewModeChange?: (mode: "list" | "cards") => void;
+  renderAccountCard?: (account: AccountSummary) => ReactNode;
 };
 
 export function AccountList({
@@ -44,10 +49,14 @@ export function AccountList({
   onSelect,
   onOpenImport,
   onOpenOauth,
+  onOpenAutoLogin,
   sortMode,
   onSortModeChange,
   showResetCreditBadges = true,
   readOnly = false,
+  viewMode = "list",
+  onViewModeChange,
+  renderAccountCard,
 }: AccountListProps) {
   const { t } = useTranslation();
   const [search, setSearch] = useState("");
@@ -77,7 +86,7 @@ export function AccountList({
   }, [accounts, quotaDisplay, search, statusFilter, activeSortMode]);
 
   return (
-    <div className="flex max-h-[calc(100dvh-15rem)] min-h-0 min-w-0 flex-1 flex-col space-y-3">
+    <div className={`flex min-h-0 min-w-0 flex-1 flex-col space-y-3 ${viewMode === "list" ? "max-h-[calc(100dvh-15rem)]" : ""}`}>
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <div className="relative min-w-0 sm:col-span-2">
           <Search className="pointer-events-none absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground/60" aria-hidden />
@@ -136,22 +145,32 @@ export function AccountList({
           {t("accounts.list.needHelp")}
           {helpOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
         </Button>
-        <Button
-          type="button"
-          size="sm"
-          className="gap-1.5"
+        <div className="flex items-center gap-2">
+          {onViewModeChange ? <div className="flex items-center rounded-md border p-0.5" role="group" aria-label={t("accounts.list.viewMode")}>
+            <Button type="button" size="icon-sm" variant={viewMode === "list" ? "secondary" : "ghost"} aria-label={t("accounts.list.viewList")} aria-pressed={viewMode === "list"} onClick={() => onViewModeChange("list")}>
+              <List className="h-3.5 w-3.5" />
+            </Button>
+            <Button type="button" size="icon-sm" variant={viewMode === "cards" ? "secondary" : "ghost"} aria-label={t("accounts.list.viewCards")} aria-pressed={viewMode === "cards"} onClick={() => onViewModeChange("cards")}>
+              <LayoutGrid className="h-3.5 w-3.5" />
+            </Button>
+          </div> : null}
+          <Button
+            type="button"
+            size="sm"
+            className="gap-1.5"
           disabled={readOnly}
           onClick={() => setChooserOpen(true)}
-        >
-          <Plus className="h-3.5 w-3.5" />
-          {t("accounts.list.addAccount")}
-        </Button>
+          >
+            <Plus className="h-3.5 w-3.5" />
+            {t("accounts.list.addAccount")}
+          </Button>
+        </div>
       </div>
 
       {helpOpen ? <WindowsOauthHelp /> : null}
 
       <div
-        className="flex-1 min-h-0 space-y-1 overflow-y-auto p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className={`flex-1 min-h-0 space-y-1 p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${viewMode === "list" ? "overflow-y-auto" : "overflow-visible"}`}
         data-testid="account-list-scroll-region"
       >
         {filtered.length === 0 ? (
@@ -162,6 +181,10 @@ export function AccountList({
             <p className="text-xs text-muted-foreground/70">
               {accounts.length === 0 ? t("accounts.list.emptyDescription") : t("accounts.list.adjustFilters")}
             </p>
+          </div>
+        ) : viewMode === "cards" && renderAccountCard ? (
+          <div data-testid="account-card-grid" className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+            {filtered.map((account) => renderAccountCard(account))}
           </div>
         ) : (
           filtered.map((account) => (
@@ -188,6 +211,7 @@ export function AccountList({
         onOpenChange={setChooserOpen}
         onImport={onOpenImport}
         onAddAccount={onOpenOauth}
+        onAutoLogin={onOpenAutoLogin ?? onOpenImport}
       />
     </div>
   );

@@ -58,6 +58,8 @@ class UnboundSelectionOwner(StickySelectionOwner, Protocol):
 class UnboundSelectionRequest(Generic[SelectionInputsT]):
     prefer_earlier_reset_accounts: bool
     prefer_earlier_reset_window: ResetPreferenceWindow
+    prefer_subscription_expiry: bool
+    subscription_expiry_window_days: int
     routing_strategy: RoutingStrategy
     relative_availability_power: float
     relative_availability_top_k: int
@@ -205,6 +207,8 @@ async def run_unbound_selection_path(
                     selection_states,
                     prefer_earlier_reset=prefer_earlier_reset_accounts,
                     prefer_earlier_reset_window=prefer_earlier_reset_window,
+                    prefer_subscription_expiry=request.prefer_subscription_expiry,
+                    subscription_expiry_window_days=request.subscription_expiry_window_days,
                     routing_strategy=routing_strategy,
                     relative_availability_power=relative_availability_power,
                     relative_availability_top_k=relative_availability_top_k,

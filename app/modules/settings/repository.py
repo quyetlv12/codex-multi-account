@@ -41,6 +41,8 @@ class SettingsRepository:
             upstream_proxy_default_pool_id=None,
             prefer_earlier_reset_accounts=True,
             prefer_earlier_reset_window="secondary",
+            prefer_subscription_expiry_accounts=False,
+            subscription_expiry_window_days=7,
             show_reset_credit_badges=True,
             auto_redeem_reset_credits_before_expiry=False,
             show_reset_credit_expiry_badge=True,
@@ -106,6 +108,8 @@ class SettingsRepository:
         upstream_proxy_default_pool_id: str | None = None,
         prefer_earlier_reset_accounts: bool | None = None,
         prefer_earlier_reset_window: str | None = None,
+        prefer_subscription_expiry_accounts: bool | None = None,
+        subscription_expiry_window_days: int | None = None,
         show_reset_credit_badges: bool | None = None,
         auto_redeem_reset_credits_before_expiry: bool | None = None,
         show_reset_credit_expiry_badge: bool | None = None,
@@ -182,6 +186,10 @@ class SettingsRepository:
             settings.prefer_earlier_reset_accounts = prefer_earlier_reset_accounts
         if prefer_earlier_reset_window is not None:
             settings.prefer_earlier_reset_window = prefer_earlier_reset_window
+        if prefer_subscription_expiry_accounts is not None:
+            settings.prefer_subscription_expiry_accounts = prefer_subscription_expiry_accounts
+        if subscription_expiry_window_days is not None:
+            settings.subscription_expiry_window_days = subscription_expiry_window_days
         if show_reset_credit_badges is not None:
             settings.show_reset_credit_badges = show_reset_credit_badges
         if auto_redeem_reset_credits_before_expiry is not None:

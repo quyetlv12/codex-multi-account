@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback, useMemo, useState } from "react";
+import { Suspense, lazy, useCallback, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router-dom";
 
@@ -7,7 +7,9 @@ import { AlertMessage } from "@/components/alert-message";
 import { LoadingOverlay } from "@/components/layout/loading-overlay";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useDialogState } from "@/hooks/use-dialog-state";
-import { AccountDetail } from "@/features/accounts/components/account-detail";
+import { AccountDetail, type AccountDetailProps } from "@/features/accounts/components/account-detail";
+import { AccountDetailDialog } from "@/features/accounts/components/account-detail-dialog";
+import { AccountCard } from "@/features/accounts/components/account-card";
 import { AccountList } from "@/features/accounts/components/account-list";
 import { AccountsSkeleton } from "@/features/accounts/components/accounts-skeleton";
 import { ImportDialog } from "@/features/accounts/components/import-dialog";
@@ -25,7 +27,7 @@ import {
 import { useOauth } from "@/features/accounts/hooks/use-oauth";
 import { useSettings, useUpstreamProxyAdmin } from "@/features/settings/hooks/use-settings";
 import { useAccountQuotaDisplayStore } from "@/hooks/use-account-quota-display";
-import type { AccountAuthExportResponse } from "@/features/accounts/schemas";
+import type { AccountAuthExportResponse, AccountSummary } from "@/features/accounts/schemas";
 import { useAuthStore } from "@/features/auth/hooks/use-auth";
 import { getErrorMessageOrNull } from "@/utils/errors";
 
@@ -39,10 +41,15 @@ export function AccountsPage() {
   const { t } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
   const [accountSortMode, setAccountSortMode] = useState<AccountSortMode>(DEFAULT_ACCOUNT_SORT_MODE);
+  const [accountViewMode, setAccountViewMode] = useState<"list" | "cards">("cards");
   const [oauthAccountId, setOauthAccountId] = useState<string | null>(null);
+  const [detailAccountId, setDetailAccountId] = useState<string | null>(null);
+  const detailTrigger = useRef<HTMLElement | null>(null);
+  const accountsPageTitle = useRef<HTMLHeadingElement | null>(null);
   const {
     accountsQuery,
     importMutation,
+    credentialLoginMutation,
     pauseMutation,
     resumeMutation,
     setAliasMutation,
@@ -60,6 +67,7 @@ export function AccountsPage() {
   const canWrite = useAuthStore((state) => state.canWrite);
 
   const importDialog = useDialogState();
+  const autoLoginDialog = useDialogState();
   const oauthDialog = useDialogState();
   const deleteDialog = useDialogState<string>();
   type ResetCreditDialogTarget = { accountId: string; availableResetCredits: number };
@@ -112,10 +120,18 @@ export function AccountsPage() {
         : null,
     [accounts, resolvedSelectedAccountId],
   );
-  const resetCreditsQuery = useAccountUsageResetCredits(selectedAccount?.accountId ?? null);
+  const detailAccount = useMemo(
+    () => (detailAccountId ? accounts.find((account) => account.accountId === detailAccountId) ?? null : null),
+    [accounts, detailAccountId],
+  );
+  if (detailAccountId && !detailAccount) {
+    setDetailAccountId(null);
+  }
+  const resetCreditsQuery = useAccountUsageResetCredits((detailAccount ?? selectedAccount)?.accountId ?? null);
 
   const mutationBusy =
     importMutation.isPending ||
+    credentialLoginMutation.isPending ||
     pauseMutation.isPending ||
     resumeMutation.isPending ||
     setAliasMutation.isPending ||
@@ -131,6 +147,7 @@ export function AccountsPage() {
 
   const mutationError =
     getErrorMessageOrNull(importMutation.error) ||
+    getErrorMessageOrNull(credentialLoginMutation.error) ||
     getErrorMessageOrNull(pauseMutation.error) ||
     getErrorMessageOrNull(resumeMutation.error) ||
     getErrorMessageOrNull(setAliasMutation.error) ||
@@ -146,11 +163,46 @@ export function AccountsPage() {
     getErrorMessageOrNull(accountBindingMutation.error) ||
     getErrorMessageOrNull(testEndpointMutation.error);
 
+  const getDetailProps = (account: AccountSummary | null): AccountDetailProps => ({
+    account,
+    showAccountId: account?.isEmailDuplicate === true,
+    busy: mutationBusy,
+    readOnly: !canWrite,
+    onPause: (accountId) => void pauseMutation.mutateAsync(accountId),
+    onResume: (accountId) => void resumeMutation.mutateAsync(accountId),
+    onProbe: (accountId) => void probeMutation.mutateAsync({ accountId }),
+    onResetUsage: (accountId) => usageResetDialog.show(accountId),
+    onSetAlias: (accountId, alias) => setAliasMutation.mutateAsync({ accountId, alias }),
+    onDelete: (accountId) => deleteDialog.show(accountId),
+    onReauth: () => {
+      setOauthAccountId(account?.accountId ?? null);
+      oauthDialog.show();
+    },
+    onExportAuth: (accountId) => {
+      void exportAuthMutation.mutateAsync(accountId).then((result) => exportDialog.show(result)).catch(() => null);
+    },
+    onResetCredit: (accountId) => {
+      const account = accounts.find((item) => item.accountId === accountId);
+      resetCreditDialog.show({ accountId, availableResetCredits: account?.availableResetCredits ?? 0 });
+    },
+    showResetCreditExpiryBadge,
+    onLimitWarmupChange: (accountId, enabled) => void limitWarmupMutation.mutateAsync({ accountId, enabled }),
+    onRoutingPolicyChange: (accountId, routingPolicy) => void routingPolicyMutation.mutateAsync({ accountId, routingPolicy }),
+    onSecurityWorkAuthorizedChange: (accountId, enabled) => void updateMutation.mutateAsync({ accountId, payload: { securityWorkAuthorized: enabled } }),
+    onSubscriptionExpiryChange: (accountId, subscriptionExpiresAt) => void updateMutation.mutateAsync({ accountId, payload: { subscriptionExpiresAt } }),
+    upstreamProxyAdmin: upstreamProxyQuery.data ?? null,
+    onProxyBindingSave: (accountId, payload) => accountBindingMutation.mutateAsync({ accountId, payload }),
+    onProxyEndpointTest: (endpointId) => testEndpointMutation.mutateAsync(endpointId),
+    resetCredits: account ? (resetCreditsQuery.data?.rateLimitResetCredits ?? null) : null,
+    resetCreditsLoading: account ? resetCreditsQuery.isFetching : false,
+    resetCreditsUnavailable: account ? !!resetCreditsQuery.error : false,
+  });
+
   return (
     <div className="animate-fade-in-up space-y-6">
       {/* Page header */}
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">{t("accounts.page.title")}</h1>
+        <h1 ref={accountsPageTitle} tabIndex={-1} className="text-2xl font-semibold tracking-tight">{t("accounts.page.title")}</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           {t("accounts.page.subtitle")}
         </p>
@@ -165,11 +217,11 @@ export function AccountsPage() {
       ) : (
         <div
           data-testid="accounts-layout"
-          className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-[minmax(18rem,22rem)_minmax(0,1fr)]"
+          className={accountViewMode === "cards" ? "min-w-0" : "grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-[minmax(18rem,22rem)_minmax(0,1fr)]"}
         >
           <div
             data-testid="accounts-list-panel"
-            className="min-w-0 min-h-0 self-start"
+            className={accountViewMode === "cards" ? "min-w-0" : "min-w-0 min-h-0 self-start"}
           >
             <div
               data-testid="accounts-list-card"
@@ -181,8 +233,45 @@ export function AccountsPage() {
                 onSelect={handleSelectAccount}
                 sortMode={accountSortMode}
                 onSortModeChange={setAccountSortMode}
+                viewMode={accountViewMode}
+                onViewModeChange={setAccountViewMode}
+                renderAccountCard={(account) => (
+                  <AccountCard
+                    key={account.accountId}
+                    account={account}
+                    selected={account.accountId === resolvedSelectedAccountId}
+                    showAccountId={account.isEmailDuplicate === true}
+                    onSelect={(accountId, trigger) => {
+                      detailTrigger.current = trigger;
+                      handleSelectAccount(accountId);
+                      setDetailAccountId(accountId);
+                    }}
+                    busy={mutationBusy}
+                    readOnly={!canWrite}
+                    onPause={(accountId) => void pauseMutation.mutateAsync(accountId)}
+                    onResume={(accountId) => void resumeMutation.mutateAsync(accountId)}
+                    onProbe={(accountId) => void probeMutation.mutateAsync({ accountId })}
+                    onDelete={(accountId) => deleteDialog.show(accountId)}
+                    onReauth={() => {
+                      setOauthAccountId(account.accountId);
+                      oauthDialog.show();
+                    }}
+                    onExportAuth={(accountId) => {
+                      void exportAuthMutation.mutateAsync(accountId).then((result) => exportDialog.show(result)).catch(() => null);
+                    }}
+                    onResetCredit={(accountId) => {
+                      const target = accounts.find((item) => item.accountId === accountId);
+                      resetCreditDialog.show({ accountId, availableResetCredits: target?.availableResetCredits ?? 0 });
+                    }}
+                    showResetCreditExpiryBadge={showResetCreditExpiryBadge}
+                    onLimitWarmupChange={(accountId, enabled) => void limitWarmupMutation.mutateAsync({ accountId, enabled })}
+                    onRoutingPolicyChange={(accountId, routingPolicy) => void routingPolicyMutation.mutateAsync({ accountId, routingPolicy })}
+                    onSecurityWorkAuthorizedChange={(accountId, enabled) => void updateMutation.mutateAsync({ accountId, payload: { securityWorkAuthorized: enabled } })}
+                  />
+                )}
                 showResetCreditBadges={showResetCreditBadges}
                 onOpenImport={() => importDialog.show()}
+                onOpenAutoLogin={() => autoLoginDialog.show()}
                 onOpenOauth={() => {
                   setOauthAccountId(null);
                   oauthDialog.show();
@@ -192,72 +281,47 @@ export function AccountsPage() {
             </div>
           </div>
 
-          <AccountDetail
-            account={selectedAccount}
-            showAccountId={selectedAccount?.isEmailDuplicate === true}
-            busy={mutationBusy}
-            readOnly={!canWrite}
-            onPause={(accountId) => void pauseMutation.mutateAsync(accountId)}
-            onResume={(accountId) => void resumeMutation.mutateAsync(accountId)}
-            onProbe={(accountId) => void probeMutation.mutateAsync({ accountId })}
-            onResetUsage={(accountId) => usageResetDialog.show(accountId)}
-            onSetAlias={(accountId, alias) =>
-              setAliasMutation.mutateAsync({ accountId, alias })
-            }
-            onDelete={(accountId) => deleteDialog.show(accountId)}
-            onReauth={() => {
-              setOauthAccountId(selectedAccount?.accountId ?? null);
-              oauthDialog.show();
-            }}
-            onExportAuth={(accountId) => {
-              void exportAuthMutation
-                .mutateAsync(accountId)
-                .then((result) => exportDialog.show(result))
-                .catch(() => null);
-            }}
-            onResetCredit={(accountId) => {
-              const account = accountsQuery.data?.find((item) => item.accountId === accountId);
-              resetCreditDialog.show({
-                accountId,
-                availableResetCredits: account?.availableResetCredits ?? 0,
-              });
-            }}
-            showResetCreditExpiryBadge={showResetCreditExpiryBadge}
-            onLimitWarmupChange={(accountId, enabled) =>
-              void limitWarmupMutation.mutateAsync({ accountId, enabled })
-            }
-            onRoutingPolicyChange={(accountId, routingPolicy) =>
-              void routingPolicyMutation.mutateAsync({
-                accountId,
-                routingPolicy,
-              })
-            }
-            onSecurityWorkAuthorizedChange={(accountId, enabled) =>
-              void updateMutation.mutateAsync({
-                accountId,
-                securityWorkAuthorized: enabled,
-              })
-            }
-            upstreamProxyAdmin={upstreamProxyQuery.data ?? null}
-            onProxyBindingSave={(accountId, payload) =>
-              accountBindingMutation.mutateAsync({ accountId, payload })
-            }
-            onProxyEndpointTest={(endpointId) => testEndpointMutation.mutateAsync(endpointId)}
-            resetCredits={resetCreditsQuery.data?.rateLimitResetCredits ?? null}
-            resetCreditsLoading={resetCreditsQuery.isFetching}
-            resetCreditsUnavailable={!!resetCreditsQuery.error}
-          />
+          {accountViewMode === "list" ? <AccountDetail {...getDetailProps(selectedAccount)} /> : null}
         </div>
       )}
 
+      <AccountDetailDialog
+        open={detailAccount !== null}
+        onOpenChange={(open) => {
+          if (!open) setDetailAccountId(null);
+        }}
+        detail={getDetailProps(detailAccount)}
+        error={mutationError}
+        onCloseAutoFocus={(event) => {
+          if (detailTrigger.current?.isConnected) {
+            event.preventDefault();
+            detailTrigger.current.focus();
+          } else if (accountsPageTitle.current?.isConnected) {
+            event.preventDefault();
+            accountsPageTitle.current.focus();
+          }
+        }}
+      />
+
       <ImportDialog
         open={importDialog.open}
-        busy={importMutation.isPending}
-        error={getErrorMessageOrNull(importMutation.error)}
+        busy={mutationBusy}
+        error={mutationError}
         onOpenChange={importDialog.onOpenChange}
         onImport={async (file) => {
           await importMutation.mutateAsync(file);
         }}
+        onCredentialLogin={(text) => credentialLoginMutation.mutateAsync(text)}
+      />
+
+      <ImportDialog
+        open={autoLoginDialog.open}
+        mode="credential"
+        busy={mutationBusy}
+        error={mutationError}
+        onOpenChange={autoLoginDialog.onOpenChange}
+        onImport={async () => undefined}
+        onCredentialLogin={(text) => credentialLoginMutation.mutateAsync(text)}
       />
 
       <Suspense fallback={null}>

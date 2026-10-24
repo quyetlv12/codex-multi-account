@@ -15,6 +15,8 @@ export function buildSettingsUpdateRequest(
     httpDownstreamTransportPolicy: settings.httpDownstreamTransportPolicy,
     preferEarlierResetAccounts: settings.preferEarlierResetAccounts,
     preferEarlierResetWindow: settings.preferEarlierResetWindow,
+    preferSubscriptionExpiryAccounts: settings.preferSubscriptionExpiryAccounts,
+    subscriptionExpiryWindowDays: settings.subscriptionExpiryWindowDays,
     showResetCreditBadges: settings.showResetCreditBadges,
     autoRedeemResetCreditsBeforeExpiry: settings.autoRedeemResetCreditsBeforeExpiry,
     showResetCreditExpiryBadge: settings.showResetCreditExpiryBadge,
