@@ -1,0 +1,3 @@
+- [x] Brighten dark theme surface and border tokens without changing light mode.
+- [x] Verify dashboard/accounts in light and dark themes at desktop and mobile widths.
+- [x] Build, run focused theme tests, review screenshot, and deploy static assets safely.

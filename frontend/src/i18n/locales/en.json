@@ -47,8 +47,8 @@
   "accounts.detail.saveAlias": "Save alias",
   "accounts.detail.unknownWorkspace": "Personal / unknown workspace",
   "accounts.importDialog.description": "Upload an auth.json file exported from Codex.",
-  "accounts.importDialog.autoLoginTitle": "Auto login account",
-  "accounts.importDialog.autoLoginDescription": "Paste one or more email|password|2FA lines to log in automatically.",
+  "accounts.importDialog.autoLoginTitle": "Auto login",
+  "accounts.importDialog.autoLoginDescription": "Add accounts using your login credentials.",
   "accounts.importDialog.fileLabel": "auth.json file",
   "accounts.importDialog.title": "Import account",
   "accounts.list.addAccount": "Add account",
@@ -1481,10 +1481,12 @@
   "settings.routing.subscriptionExpiry.windowAria": "Subscription expiry window in days",
   "settings.routing.subscriptionExpiry.save": "Save expiry window",
   "common.save": "Save",
-  "accounts.importDialog.credentialLabel": "Paste email|password|2FA",
+  "accounts.importDialog.credentialLabel": "Account credentials",
   "accounts.importDialog.credentialDescription": "One account per line.",
   "accounts.importDialog.login": "Login and import",
-  "accounts.importDialog.credentialHint": "One account per line. Credentials are used only for login and are not stored.",
+  "accounts.importDialog.credentialHint": "Credentials are used only for login and are not stored.",
   "accounts.importDialog.credentialResult": "Imported {{success}} account(s); {{failed}} failed.",
-  "accounts.importDialog.credentialFailed": "Credential login failed."
+  "accounts.importDialog.credentialFailed": "Credential login failed.",
+  "accounts.importDialog.credentialFormat": "Format",
+  "accounts.importDialog.loggingIn": "Logging in…"
 }

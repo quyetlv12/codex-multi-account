@@ -47,8 +47,8 @@
   "accounts.detail.saveAlias": "Lưu biệt danh",
   "accounts.detail.unknownWorkspace": "Cá nhân / không rõ workspace",
   "accounts.importDialog.description": "Tải lên tệp auth.json đã xuất từ Codex.",
-  "accounts.importDialog.autoLoginTitle": "Tài khoản đăng nhập tự động",
-  "accounts.importDialog.autoLoginDescription": "Dán một hoặc nhiều dòng email|password|2FA để tự động đăng nhập.",
+  "accounts.importDialog.autoLoginTitle": "Đăng nhập tự động",
+  "accounts.importDialog.autoLoginDescription": "Thêm tài khoản bằng thông tin đăng nhập của bạn.",
   "accounts.importDialog.fileLabel": "Tệp auth.json",
   "accounts.importDialog.title": "Nhập tài khoản",
   "accounts.list.addAccount": "Thêm tài khoản",
@@ -1481,10 +1481,12 @@
   "settings.routing.subscriptionExpiry.windowAria": "Cửa sổ ngày hết hạn gói",
   "settings.routing.subscriptionExpiry.save": "Lưu cửa sổ hết hạn",
   "common.save": "Lưu",
-  "accounts.importDialog.credentialLabel": "Dán email|password|2FA",
+  "accounts.importDialog.credentialLabel": "Thông tin tài khoản",
   "accounts.importDialog.credentialDescription": "Mỗi dòng một tài khoản.",
   "accounts.importDialog.login": "Đăng nhập và nhập",
-  "accounts.importDialog.credentialHint": "Mỗi dòng một tài khoản. Thông tin xác thực chỉ dùng để đăng nhập và không được lưu.",
+  "accounts.importDialog.credentialHint": "Thông tin xác thực chỉ dùng để đăng nhập và không được lưu.",
   "accounts.importDialog.credentialResult": "Đã nhập {{success}} tài khoản; {{failed}} tài khoản thất bại.",
-  "accounts.importDialog.credentialFailed": "Đăng nhập bằng thông tin xác thực thất bại."
+  "accounts.importDialog.credentialFailed": "Đăng nhập bằng thông tin xác thực thất bại.",
+  "accounts.importDialog.credentialFormat": "Định dạng",
+  "accounts.importDialog.loggingIn": "Đang đăng nhập…"
 }

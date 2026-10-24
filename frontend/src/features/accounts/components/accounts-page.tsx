@@ -200,12 +200,8 @@ export function AccountsPage() {
 
   return (
     <div className="animate-fade-in-up space-y-6">
-      {/* Page header */}
-      <div>
-        <h1 ref={accountsPageTitle} tabIndex={-1} className="text-2xl font-semibold tracking-tight">{t("accounts.page.title")}</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {t("accounts.page.subtitle")}
-        </p>
+      <div className="sr-only">
+        <h1 ref={accountsPageTitle} tabIndex={-1}>{t("accounts.page.title")}</h1>
       </div>
 
       {mutationError ? (

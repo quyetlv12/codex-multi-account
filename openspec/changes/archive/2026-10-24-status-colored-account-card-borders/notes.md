@@ -1,0 +1,3 @@
+Verification: 23 existing card/action unit tests passed; focused ESLint and production TypeScript/Vite build passed. Playwright verified all six status border families, selected rings, refreshed status data, accessible icons and actions, no overflow at 1440px and 390px, in light and dark themes. Both local and installed static assets passed (2 browser tests each), using intercepted synthetic account APIs only. Static hashes and served HTML match the build. No service restart or account/database mutation.
+
+Rollback: /Users/quyetdev/.codex-lb/backups/web-status-card-borders-20261024-140104/ROLLBACK.md

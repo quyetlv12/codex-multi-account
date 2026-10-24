@@ -147,6 +147,7 @@ export const AccountImportResponseSchema = z.object({
   workspaceLabel: z.string().nullable().optional(),
   seatType: z.string().nullable().optional(),
   planType: z.string(),
+  subscriptionExpiresAt: z.iso.datetime({ offset: true }).nullable().optional(),
   status: z.string(),
 });
 export const CredentialLoginResponseSchema = z.object({

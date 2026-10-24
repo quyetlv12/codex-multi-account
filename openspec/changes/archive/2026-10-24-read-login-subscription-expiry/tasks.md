@@ -1,0 +1,4 @@
+- [x] Read matching account entitlement using the existing login session; fail softly without exposing payloads or secrets.
+- [x] Parse direct expiry or original billing date plus 30 days, preserving timezone and rejecting unrelated token/quota dates.
+- [x] Persist dates for new accounts or empty existing dates atomically with credential replacement, preserving populated dates and routing configuration.
+- [x] Verify parser, HTTP client against a local simulation, credential-login persistence, existing routing and UI presentation; review diff and validate specs.

@@ -1,0 +1,4 @@
+- [x] Add explicit maintenance backfill, dry-run by default, using existing entitlement reader.
+- [x] Verify preservation of manual dates, concurrent changes, failures, backups and repeat runs with synthetic SQLite data.
+- [x] Back up and fill live empty dates; verify dashboard API and visible UI without restarting or authenticating accounts.
+- [x] Review, validate specifications and archive verified change.

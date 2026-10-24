@@ -1,0 +1,2 @@
+- [x] Remove the visible accounts title block while preserving accessible focus behavior.
+- [x] Verify the accounts tests, build, and browser layout; validate and archive the spec.

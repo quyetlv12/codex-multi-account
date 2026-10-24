@@ -10,7 +10,7 @@ import {
   Trash2,
   Zap,
 } from "lucide-react";
-import { useId } from "react";
+import { useId, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
@@ -29,6 +29,7 @@ import type {
 import { formatSingleUnitRemaining } from "@/utils/formatters";
 
 export type AccountActionsProps = {
+  children?: ReactNode;
   account: AccountSummary;
   busy: boolean;
   readOnly?: boolean;
@@ -49,6 +50,7 @@ export type AccountActionsProps = {
 };
 
 export function AccountActions({
+  children,
   account,
   busy,
   readOnly = false,
@@ -134,12 +136,14 @@ export function AccountActions({
         />
       </label>
 
-      <div className="grid grid-cols-2 gap-2 @[32rem]:grid-cols-3">
+      <div className={children
+        ? "grid grid-cols-1 gap-2 @[18rem]:grid-cols-6 @[18rem]:[&>button]:col-span-3 @[18rem]:[&:has(>button:last-child:nth-child(odd))>button:nth-last-child(-n+3)]:col-span-2 @[18rem]:[&:has(>button:last-child:nth-child(odd))>button:nth-last-child(-n+3)]:px-1"
+        : "grid grid-cols-1 gap-2 @[18rem]:grid-cols-2 @[32rem]:grid-cols-3"}>
         {account.status === "paused" ? (
           <Button
             type="button"
             size="sm"
-            className="h-9 w-full gap-1.5 text-xs"
+            className="h-9 w-full gap-1.5 text-sm font-bold"
             onClick={() => onResume(account.accountId)}
             disabled={busy || readOnly}
           >
@@ -151,7 +155,7 @@ export function AccountActions({
             type="button"
             size="sm"
             variant="outline"
-            className="h-9 w-full gap-1.5 text-xs"
+            className="h-9 w-full gap-1.5 text-sm font-bold"
             onClick={() => onPause(account.accountId)}
             disabled={busy || readOnly}
           >
@@ -165,7 +169,7 @@ export function AccountActions({
             type="button"
             size="sm"
             variant="outline"
-            className="h-9 w-full gap-1.5 text-xs"
+            className="h-9 w-full gap-1.5 text-sm font-bold"
             onClick={onReauth}
             disabled={busy || readOnly}
           >
@@ -178,7 +182,7 @@ export function AccountActions({
           type="button"
           size="sm"
           variant="outline"
-          className="h-9 w-full gap-1.5 text-xs"
+          className="h-9 w-full gap-1.5 text-sm font-bold"
           onClick={() => onProbe(account.accountId)}
           disabled={probeDisabled}
         >
@@ -190,7 +194,7 @@ export function AccountActions({
           type="button"
           size="sm"
           variant="outline"
-          className="h-9 w-full gap-1.5 text-xs"
+          className="h-9 w-full gap-1.5 text-sm font-bold"
           onClick={() =>
             onLimitWarmupChange(account.accountId, !account.limitWarmupEnabled)
           }
@@ -204,7 +208,7 @@ export function AccountActions({
           type="button"
           size="sm"
           variant="outline"
-          className="h-9 w-full gap-1.5 text-xs"
+          className="h-9 w-full gap-1.5 text-sm font-bold"
           onClick={() => onExportAuth(account.accountId)}
           disabled={busy || readOnly}
         >
@@ -217,7 +221,7 @@ export function AccountActions({
             type="button"
             size="sm"
             variant="outline"
-            className="relative h-9 w-full gap-1.5 pr-8 text-xs"
+            className="relative h-9 w-full gap-1.5 pr-8 text-sm font-bold"
             onClick={() => onResetCredit(account.accountId)}
             disabled={resetCreditDisabled}
           >
@@ -239,11 +243,13 @@ export function AccountActions({
           </Button>
         ) : null}
 
+        {children}
+
         <Button
           type="button"
           size="sm"
           variant="destructive"
-          className="h-9 w-full gap-1.5 text-xs"
+          className="h-9 w-full gap-1.5 text-sm font-bold"
           onClick={() => onDelete(account.accountId)}
           disabled={busy || readOnly}
         >

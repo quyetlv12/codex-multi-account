@@ -3399,3 +3399,145 @@ technology so the existing accessible names remain unchanged.
 - **THEN** the header exposes a compact menu button instead of the desktop menu
 - **AND** opening it displays the same destinations with icons and translated labels
 - **AND** selecting a destination navigates and closes the menu
+
+### Requirement: Auto-login modal presentation
+The auto-login modal SHALL separate its title, credential format guide, labeled input, privacy hint, and action footer. It SHALL use the dashboard theme and fit narrow viewports without horizontal overflow, allowing vertical scrolling on short viewports.
+
+#### Scenario: Operator enters credentials
+- **WHEN** the operator opens auto login on a desktop or mobile viewport
+- **THEN** a labeled multiline input and the email|password|2FA format guide are visible
+- **AND** close and submit actions are distinguishable and keyboard accessible
+
+#### Scenario: Login is pending
+- **WHEN** credential login is busy
+- **THEN** the input and close/submit controls are disabled and a processing label is displayed
+- **AND** dismissing the modal does not clear the pending input
+
+#### Scenario: Retry after a partial failure
+- **WHEN** some submitted accounts fail
+- **THEN** the modal remains open, shows result counts, and retains only failed lines for retry
+- **AND** the result summary does not repeat credential material
+
+### Requirement: Compact accounts page header
+The accounts page SHALL omit the visible page title and subtitle above the accounts toolbar, while retaining a visually hidden accessible page heading and the account detail modal's keyboard focus fallback.
+
+#### Scenario: Operator opens the accounts page
+- **WHEN** the accounts page is displayed
+- **THEN** the toolbar appears without a visible title or subtitle block above it
+- **AND** assistive technology can still identify the page heading
+
+### Requirement: Account card expiry alignment with missing primary quota
+The Accounts card view SHALL reserve the primary 5h quota row's vertical space when another quota window is rendered but no reliable primary 5h quota data is available. The reserved row SHALL remain visually empty and SHALL NOT invent quota, reset, or subscription expiry values. This presentational behavior SHALL NOT alter routing, eligibility, quota calculations, or account actions.
+
+#### Scenario: Weekly-only card
+- **WHEN** an account card has a weekly quota window and no primary 5h quota window
+- **THEN** the card reserves the primary quota row space before the weekly row
+- **AND** the subscription expiry section has the same content offset as a card with primary and weekly rows
+- **AND** no synthetic 5h value or reset timestamp is exposed
+
+### Requirement: Header light and dark theme switch
+The dashboard header SHALL expose a compact light/dark switch with sun and moon icons instead of a theme dropdown. Its checked state SHALL represent the effective dark theme and its accessible name SHALL remain stable. Activation SHALL toggle the effective theme and persist an explicit light or dark preference through the existing theme store.
+
+#### Scenario: Toggle and restore dark mode
+- **WHEN** the user activates the header switch in light mode
+- **THEN** the dashboard changes to dark mode and the switch is checked
+- **AND** dark mode is restored when the dashboard reloads
+
+#### Scenario: System preference and appearance settings
+- **WHEN** the saved preference is System
+- **THEN** the switch reflects the resolved system theme without changing the saved preference
+- **AND** activating it selects the opposite explicit theme
+- **AND** Light, Dark and System remain selectable in appearance settings
+
+#### Scenario: Keyboard operation
+- **WHEN** the user focuses the switch and presses Space or Enter
+- **THEN** the effective theme toggles and the switch retains keyboard focus
+
+#### Scenario: Responsive and reduced-motion layout
+- **WHEN** the header renders at widths from 320px to 2560px
+- **THEN** the switch fits without header overflow
+- **AND** its transitions are disabled when reduced motion is requested
+
+### Requirement: Numbered credential editor
+The auto-login modal SHALL use a wider desktop layout with viewport margins. Its editor SHALL keep each account record on one visual line with local horizontal scrolling for long records. It SHALL display sequential record numbers beside nonempty, non-comment lines, synchronized with vertical scrolling. Numbering SHALL NOT alter submitted credentials or partial-failure retry behavior.
+
+#### Scenario: Operator pastes multiple records
+- **WHEN** the operator pastes account records separated by newlines, including blank lines or comments
+- **THEN** account records have sequential numbers and do not visually wrap
+- **AND** blank lines and comments do not consume record numbers
+- **AND** the submitted text remains unchanged
+
+#### Scenario: Operator scrolls a long list on a narrow screen
+- **WHEN** the editor contains records wider or taller than its viewport
+- **THEN** scrolling remains within the editor and the modal fits the viewport
+- **AND** numbers remain aligned with the corresponding records
+
+### Requirement: Copy account card title
+Pointer or keyboard activation of an account card title SHALL copy its full alias, display name, or fallback email, even when truncated or privacy-blurred. Localized feedback SHALL report clipboard success or failure. Title activation SHALL NOT open details or invoke account management actions. The separate View details button SHALL still open the detail modal.
+
+#### Scenario: Copy a title
+- **WHEN** the operator activates an account card title
+- **THEN** the full title is copied and success feedback is shown
+- **AND** the account detail modal remains closed
+
+#### Scenario: Clipboard unavailable
+- **WHEN** the clipboard operation fails
+- **THEN** failure feedback is shown without reporting success
+
+#### Scenario: Open account details
+- **WHEN** the operator activates View details
+- **THEN** the account detail modal opens as before
+
+### Requirement: Readable account action labels
+Account action buttons with text SHALL display labels at 14px with bold weight. Labels SHALL fit within their buttons on desktop and mobile in light and dark themes. The card View details control SHALL use an accessible eye icon without visible text. Existing actions, disabled states and visual variants SHALL remain unchanged.
+
+#### Scenario: Scan account actions
+- **WHEN** the operator views account actions on a desktop or mobile screen
+- **THEN** text labels appear at 14px with weight 700 without clipping or overlap
+- **AND** existing actions and disabled states remain available as before
+
+### Requirement: Status-colored account card borders
+Account card borders SHALL use the same color family as their normalized status badge: emerald for active, amber for paused, orange for rate limited, red for quota exceeded, sky for reauthentication required and zinc for deactivated. Selected cards SHALL retain a visible selection ring in that status color family. Borders SHALL update when account status changes and remain visible in light and dark themes without changing card layout or account actions.
+
+#### Scenario: Identify account status from a card
+- **WHEN** account cards render in light or dark mode on desktop or mobile
+- **THEN** each card border matches its status color family
+- **AND** its accessible status icon and actions remain available
+
+#### Scenario: Account status changes
+- **WHEN** an account receives an updated status
+- **THEN** its border and selection ring reflect the new status color family
+
+### Requirement: Inline icon-only card details action
+Account cards SHALL place the View details control inside the lower account action grid instead of a standalone row above account settings. The control SHALL display only an eye icon and SHALL retain a localized accessible name and tooltip. Pointer and keyboard activation SHALL open the existing account detail modal and closing it SHALL restore focus to the control. Other action behavior and the list/detail layouts SHALL remain unchanged.
+
+#### Scenario: Open and close details from a card
+- **WHEN** the operator activates the eye button by pointer or keyboard
+- **THEN** the existing account detail modal opens
+- **AND** closing the modal returns focus to the eye button in the action grid
+
+#### Scenario: Responsive action layout
+- **WHEN** cards render in light or dark themes on desktop or mobile
+- **THEN** the eye button fits within the same grid as other account actions without visible text or horizontal overflow
+
+### Requirement: Balanced account card action rows
+Account cards with room for multiple columns SHALL use two equally sized actions per row. When an odd number of actions would leave one action alone, the final three actions SHALL share a row in three equal columns. Seven actions SHALL form rows of two, two and three; six actions SHALL form three rows of two. Action order, behavior and accessible names SHALL be preserved. Non-card action layouts SHALL remain unchanged.
+
+#### Scenario: Reset credit adds a seventh action
+- **WHEN** an account card renders seven action buttons
+- **THEN** its last row contains Reset, View details and Delete in three equal columns without a fourth row
+
+#### Scenario: No reset credit
+- **WHEN** an account card renders six action buttons
+- **THEN** all rows contain two actions without horizontal overflow
+
+### Requirement: Brighter dark blue dashboard theme
+The dark theme SHALL use slightly brighter blue tinted surfaces and readable muted text while preserving existing layout, light theme values, and semantic status colors.
+
+#### Scenario: Dark theme remains readable
+- **WHEN** the dashboard is rendered with the dark theme
+- **THEN** the page, cards, controls, borders, and muted labels use the brighter blue palette without horizontal overflow or loss of contrast
+
+#### Scenario: Light theme is unchanged
+- **WHEN** the dashboard is rendered with the light theme
+- **THEN** its existing palette and behavior remain unchanged

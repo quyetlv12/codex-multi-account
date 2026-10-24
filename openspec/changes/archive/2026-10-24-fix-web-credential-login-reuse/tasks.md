@@ -1,0 +1,4 @@
+- [x] Add an explicit credential-login replacement flag at the service/import boundary without changing generic auth.json import semantics.
+- [x] Cover the endpoint/service behavior for same-account replacement, ambiguous identity rejection, and preservation of existing row identity/settings.
+- [x] Remove unused standalone macOS desktop implementation/assets and active requirements while retaining normal web deployment documentation.
+- [x] Run focused backend tests, OpenSpec validation, lint/format checks, and review the final diff for secrets and accidental live changes.

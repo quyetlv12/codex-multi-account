@@ -1,0 +1,5 @@
+- [x] Add an opt-in icon-only status badge with accessible label and tooltip.
+- [x] Place plan and status badges together in the Accounts card header.
+- [x] Preserve labeled status badges at other call sites.
+- [x] Add focused regression coverage for the combined badge row.
+- [x] Run focused tests, typecheck, lint, build, and browser verification.

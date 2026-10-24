@@ -524,14 +524,12 @@ class AccountsRepository:
             return existing
 
         existing_by_id = await self._session.get(Account, account.id)
-        if existing_by_id:
-            if _same_unknown_workspace_identity(existing_by_id, account) and not preserve_unknown_workspace_duplicates:
+        if not preserve_unknown_workspace_duplicates:
+            if existing_by_id and _same_unknown_workspace_identity(existing_by_id, account) and preserve_identity_slots:
                 await self._apply_account_replacement(existing_by_id, account)
                 await self._session.commit()
                 await self._session.refresh(existing_by_id)
                 return existing_by_id
-            account.id = await self._next_available_account_id(account.id)
-        elif not preserve_unknown_workspace_duplicates:
             if _workspace_slot_key(account):
                 existing_by_email = await self._single_unknown_workspace_account_by_email(account.email)
             elif preserve_identity_slots and account.chatgpt_account_id:
@@ -546,6 +544,8 @@ class AccountsRepository:
                 await self._session.refresh(existing_by_email)
                 return existing_by_email
 
+        if existing_by_id:
+            account.id = await self._next_available_account_id(account.id)
         self._session.add(account)
         await self._session.commit()
         await self._session.refresh(account)
@@ -1554,6 +1554,8 @@ def _apply_account_updates(target: Account, source: Account) -> None:
     if not target.codex_installation_id:
         target.codex_installation_id = source.codex_installation_id or str(uuid.uuid4())
     target.plan_type = source.plan_type
+    if target.subscription_expires_at is None and source.subscription_expires_at is not None:
+        target.subscription_expires_at = source.subscription_expires_at
     target.access_token_encrypted = source.access_token_encrypted
     target.refresh_token_encrypted = source.refresh_token_encrypted
     target.id_token_encrypted = source.id_token_encrypted

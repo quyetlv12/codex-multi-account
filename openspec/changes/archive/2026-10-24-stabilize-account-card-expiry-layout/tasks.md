@@ -1,0 +1,6 @@
+- [x] Reserve the primary 5h quota row height when another quota row is present but the 5h window is unavailable.
+- [x] Add component and rendered browser regression coverage for expiry alignment.
+- [x] Run scoped ESLint, production build, focused component tests (4/4), and the production-preview account browser harness (10/10).
+- [x] Run repository typecheck after a clean frozen dependency install.
+- [x] Verify the deployed static bundle using the mocked browser harness (10/10), without restarting the live service (PID 60930 unchanged).
+- [x] Validate the change with strict OpenSpec validation. Repository-wide strict spec validation reports existing placeholder/long-requirement warnings (55 capabilities); unrelated specs were preserved.

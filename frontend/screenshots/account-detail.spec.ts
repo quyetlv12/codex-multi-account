@@ -34,6 +34,8 @@ for (const theme of ["light", "dark"] as const) {
         createAccountSummary({
           accountId: "demo-no-expiry", email: "demo-no-expiry@example.invalid", displayName: "Demo Standard",
           planType: "plus", subscriptionExpiresAt: null,
+          usage: { primaryRemainingPercent: null, secondaryRemainingPercent: 67, monthlyRemainingPercent: null },
+          resetAtPrimary: null, windowMinutesPrimary: null,
         }),
         createAccountSummary({
           accountId: "demo-fourth", email: "demo-fourth@example.invalid", displayName: "Demo Fourth",
@@ -87,6 +89,35 @@ for (const theme of ["light", "dark"] as const) {
       expect(overflowingCards).toBe(0);
       await expect(page.getByText("30 days", { exact: true })).toBeVisible();
       await expect(page.getByText("3 days", { exact: true })).toBeVisible();
+      const primaryCard = page.locator("article").filter({ hasText: "Demo Plus" });
+      const weeklyOnlyCard = page.locator("article").filter({ hasText: "Demo Standard" });
+      for (const [card, expectedRows] of [[primaryCard, [2, 2, 3]], [weeklyOnlyCard, [2, 2, 2]]] as const) {
+        const actionGrid = card.getByRole("button", { name: "View details" }).locator("..");
+        const rows = await actionGrid.evaluate((element) => {
+          const counts = new Map<number, number>();
+          for (const button of element.querySelectorAll(":scope > button")) {
+            const rect = button.getBoundingClientRect();
+            const y = Math.round(rect.y);
+            counts.set(y, (counts.get(y) ?? 0) + 1);
+          }
+          return Array.from(counts.values());
+        });
+        expect(rows).toEqual(expectedRows);
+        expect(await actionGrid.locator(":scope > button").evaluateAll((buttons) =>
+          buttons.every((button) => button.scrollWidth <= button.clientWidth),
+        )).toBe(true);
+      }
+      await expect(weeklyOnlyCard.getByTestId("account-card-quota-placeholder-primary")).toBeHidden();
+      await expect(weeklyOnlyCard.getByTestId("account-card-expiry")).toBeVisible();
+      const primaryCardBox = await primaryCard.boundingBox();
+      const weeklyOnlyCardBox = await weeklyOnlyCard.boundingBox();
+      const primaryExpiry = await primaryCard.getByTestId("account-card-expiry").boundingBox();
+      const weeklyOnlyExpiry = await weeklyOnlyCard.getByTestId("account-card-expiry").boundingBox();
+      expect(primaryCardBox).not.toBeNull();
+      expect(weeklyOnlyCardBox).not.toBeNull();
+      expect(primaryExpiry).not.toBeNull();
+      expect(weeklyOnlyExpiry).not.toBeNull();
+      expect(Math.abs((primaryExpiry!.y - primaryCardBox!.y) - (weeklyOnlyExpiry!.y - weeklyOnlyCardBox!.y))).toBeLessThanOrEqual(1);
       await page.screenshot({ path: testInfo.outputPath("cards.png"), fullPage: true });
       await triggers.first().click();
       const dialog = page.getByRole("dialog", { name: "Account details" });

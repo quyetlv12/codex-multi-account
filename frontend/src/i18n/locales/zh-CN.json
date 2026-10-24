@@ -46,8 +46,8 @@
   "accounts.detail.saveAlias": "保存别名",
   "accounts.detail.unknownWorkspace": "个人 / 未知 workspace",
   "accounts.importDialog.description": "上传从 Codex 导出的 auth.json 文件。",
-  "accounts.importDialog.autoLoginTitle": "自动登录账户",
-  "accounts.importDialog.autoLoginDescription": "粘贴一行或多行 email|password|2FA。",
+  "accounts.importDialog.autoLoginTitle": "自动登录",
+  "accounts.importDialog.autoLoginDescription": "使用登录信息添加账户。",
   "accounts.importDialog.fileLabel": "auth.json 文件",
   "accounts.importDialog.title": "导入账户",
   "accounts.list.addAccount": "添加账户",
@@ -1480,10 +1480,12 @@
   "settings.routing.subscriptionExpiry.windowAria": "订阅到期窗口天数",
   "settings.routing.subscriptionExpiry.save": "保存到期窗口",
   "common.save": "保存",
-  "accounts.importDialog.credentialLabel": "粘贴 email|password|2FA",
+  "accounts.importDialog.credentialLabel": "账户登录信息",
   "accounts.importDialog.credentialDescription": "每行一个账号。",
   "accounts.importDialog.login": "登录并导入",
-  "accounts.importDialog.credentialHint": "每行一个账户。凭据仅用于登录，不会保存。",
+  "accounts.importDialog.credentialHint": "登录信息仅用于登录，不会保存。",
   "accounts.importDialog.credentialResult": "已导入 {{success}} 个账户；{{failed}} 个失败。",
-  "accounts.importDialog.credentialFailed": "凭据登录失败。"
+  "accounts.importDialog.credentialFailed": "凭据登录失败。",
+  "accounts.importDialog.credentialFormat": "格式",
+  "accounts.importDialog.loggingIn": "正在登录…"
 }

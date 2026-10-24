@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import cast
 from uuid import uuid4
 
@@ -67,6 +67,7 @@ from app.modules.accounts.schemas import (
     OpenCodeAuthJson,
     OpenCodeOAuthAuth,
 )
+from app.modules.accounts.subscription import subscription_timestamp
 from app.modules.limit_warmup.repository import LimitWarmupRepository
 from app.modules.proxy.account_cache import (
     clear_account_routing_unavailable,
@@ -515,7 +516,9 @@ class AccountsService:
             opencode_auth_json=opencode_auth_json,
         )
 
-    async def import_account(self, raw: bytes) -> AccountImportResponse:
+    async def import_account(
+        self, raw: bytes, *, replace_existing: bool = False, subscription_expires_at: datetime | None = None
+    ) -> AccountImportResponse:
         try:
             auth = parse_auth_json(raw)
         except (json.JSONDecodeError, ValidationError, UnicodeDecodeError, TypeError) as exc:
@@ -536,6 +539,7 @@ class AccountsService:
             workspace_label=claims.workspace_label,
             seat_type=claims.seat_type,
             plan_type=plan_type,
+            subscription_expires_at=subscription_expires_at,
             access_token_encrypted=self._encryptor.encrypt(auth.tokens.access_token),
             refresh_token_encrypted=self._encryptor.encrypt(auth.tokens.refresh_token),
             id_token_encrypted=self._encryptor.encrypt(auth.tokens.id_token),
@@ -544,7 +548,10 @@ class AccountsService:
             deactivation_reason=None,
         )
 
-        saved = await self._repo.upsert_account_slot(account)
+        if replace_existing:
+            saved = await self._repo.upsert_reauthorized(account)
+        else:
+            saved = await self._repo.upsert_account_slot(account)
         import_usage_refresh_allowed = await self._import_usage_refresh_allowed(saved)
         if not import_usage_refresh_allowed:
             await self._repo.update_status(
@@ -569,6 +576,11 @@ class AccountsService:
             workspace_label=saved.workspace_label,
             seat_type=saved.seat_type,
             plan_type=saved.plan_type,
+            subscription_expires_at=(
+                saved.subscription_expires_at.replace(tzinfo=timezone.utc)
+                if saved.subscription_expires_at is not None and saved.subscription_expires_at.tzinfo is None
+                else saved.subscription_expires_at
+            ),
             status=saved.status,
         )
 
@@ -582,7 +594,11 @@ class AccountsService:
                 results.append(CredentialLoginResult(index=index, ok=False, step=item.get("step", "login")))
                 continue
             try:
-                account = await self.import_account(json.dumps(item["auth"]).encode())
+                account = await self.import_account(
+                    json.dumps(item["auth"]).encode(),
+                    replace_existing=True,
+                    subscription_expires_at=subscription_timestamp(item.get("subscription_expires_at")),
+                )
             except (InvalidAuthJsonError, AccountIdentityConflictError):
                 results.append(CredentialLoginResult(index=index, ok=False, step="import"))
             else:

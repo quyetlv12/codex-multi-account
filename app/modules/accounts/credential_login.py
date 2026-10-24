@@ -62,6 +62,7 @@ async def export_credentials(lines: list[CredentialLine], *, timeout_seconds: fl
     script = dedent(
         """
         import json, sys
+        from app.modules.accounts.subscription import read_subscription_expiry
         from gpt_tool.convert import canonical_from_oauth, convert_canonical
         from gpt_tool.login import LoginError, login_keep_session
         from gpt_tool.oauth import OAuthError, account_id_from_access, oauth_codex_rt_exchange
@@ -74,11 +75,21 @@ async def export_credentials(lines: list[CredentialLine], *, timeout_seconds: fl
                 bundle, session = login_keep_session(creds)
                 try:
                     tokens = oauth_codex_rt_exchange(session, bundle.device_id, creds)
+                    access = tokens.access_token or ""
+                    if not access:
+                        raise OAuthError("missing access token")
+                    try:
+                        subscription_expires_at = read_subscription_expiry(
+                            session, access, account_id_from_access(access)
+                        )
+                    except Exception:
+                        # Entitlement is optional metadata; OAuth import must
+                        # still succeed when the read or account-id decode fails.
+                        subscription_expires_at = None
                 finally:
                     close = getattr(session, "close", None)
                     if close is not None:
                         close()
-                access = tokens.access_token or ""
                 refresh = tokens.refresh_token or ""
                 if not access or not refresh:
                     raise OAuthError("missing token")
@@ -91,6 +102,7 @@ async def export_credentials(lines: list[CredentialLine], *, timeout_seconds: fl
                     session_token=bundle.session_token,
                 )
                 out.append({"ok": True, "step": "done", "index": index,
+                            "subscription_expires_at": subscription_expires_at,
                             "auth": convert_canonical(canonical, "codex")})
             except LoginError:
                 out.append({"ok": False, "step": "login", "index": index})
@@ -103,6 +115,8 @@ async def export_credentials(lines: list[CredentialLine], *, timeout_seconds: fl
     )
     env = os.environ.copy()
     env["PYTHONUNBUFFERED"] = "1"
+    app_root = str(Path(__file__).resolve().parents[3])
+    env["PYTHONPATH"] = os.pathsep.join(filter(None, (app_root, env.get("PYTHONPATH"))))
     try:
         proc = await asyncio.create_subprocess_exec(
             python,
@@ -149,6 +163,10 @@ async def export_credentials(lines: list[CredentialLine], *, timeout_seconds: fl
             or not isinstance(item.get("ok"), bool)
             or item.get("step") not in valid_steps
             or (item.get("ok") and not isinstance(item.get("auth"), dict))
+            or (
+                item.get("subscription_expires_at") is not None
+                and not isinstance(item.get("subscription_expires_at"), str)
+            )
             for item in result
         )
     ):

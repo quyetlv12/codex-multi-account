@@ -1,54 +1,44 @@
-import { Monitor, Moon, Sun } from "lucide-react";
+import { Moon, Sun } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { useThemeStore } from "@/hooks/use-theme";
-
-const THEME_OPTIONS = [
-  { value: "light", labelKey: "settings.appearance.theme.light", icon: Sun },
-  { value: "dark", labelKey: "settings.appearance.theme.dark", icon: Moon },
-  { value: "auto", labelKey: "settings.appearance.theme.auto", icon: Monitor },
-] as const;
+import { cn } from "@/lib/utils";
 
 export function ThemeToggle() {
   const { t } = useTranslation();
-  const preference = useThemeStore((s) => s.preference);
+  const theme = useThemeStore((s) => s.theme);
   const setTheme = useThemeStore((s) => s.setTheme);
-  const selected = THEME_OPTIONS.find((option) => option.value === preference)!;
-  const Icon = selected.icon;
-  const label = `${t("settings.appearance.theme.label")}: ${t(selected.labelKey)}`;
+  const isDark = theme === "dark";
+  const label = `${t("settings.appearance.theme.label")}: ${t("settings.appearance.theme.dark")}`;
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          aria-label={label}
-          title={label}
-          className="press-scale h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground"
-        >
-          <Icon className="h-4 w-4" aria-hidden="true" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        <DropdownMenuRadioGroup value={preference}>
-          {THEME_OPTIONS.map(({ value, labelKey, icon: OptionIcon }) => (
-            <DropdownMenuRadioItem key={value} value={value} onSelect={() => setTheme(value)}>
-              <OptionIcon className="h-3.5 w-3.5" aria-hidden="true" />
-              {t(labelKey)}
-            </DropdownMenuRadioItem>
-          ))}
-        </DropdownMenuRadioGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <Button
+      type="button"
+      size="sm"
+      variant="ghost"
+      role="switch"
+      aria-checked={isDark}
+      aria-label={label}
+      title={`${t("settings.appearance.theme.label")}: ${t(`settings.appearance.theme.${theme}`)}`}
+      onClick={() => setTheme(isDark ? "light" : "dark")}
+      className="relative h-8 w-16 shrink-0 rounded-full border border-border bg-muted/60 p-0 hover:bg-muted motion-reduce:transition-none dark:border-blue-400/25 dark:bg-blue-950/80 dark:hover:bg-blue-900/70"
+    >
+      <span
+        aria-hidden="true"
+        className={cn(
+          "absolute left-1 top-1/2 size-6 -translate-y-1/2 rounded-full bg-background shadow-sm transition-transform duration-200 motion-reduce:transition-none dark:bg-blue-500/25",
+          isDark && "translate-x-[1.875rem]",
+        )}
+      />
+      <Sun
+        aria-hidden="true"
+        className={cn("absolute left-2.5 size-3.5 text-foreground", isDark && "text-muted-foreground")}
+      />
+      <Moon
+        aria-hidden="true"
+        className={cn("absolute right-2.5 size-3.5 text-muted-foreground", isDark && "text-blue-200")}
+      />
+    </Button>
   );
 }

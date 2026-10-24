@@ -1,0 +1,4 @@
+- [x] Inspect installed and checkout credential-login paths and confirm the live package gap.
+- [x] Persist trusted expiry metadata and expose it in the credential-login response contract.
+- [ ] Run focused backend and frontend tests, `git diff --check`, and OpenSpec validation.
+- [ ] Build/install the verified package with a rollback backup; verify the dashboard endpoint without inference traffic.

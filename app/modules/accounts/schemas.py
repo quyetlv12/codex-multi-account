@@ -143,6 +143,7 @@ class AccountImportResponse(DashboardModel):
     workspace_label: str | None = None
     seat_type: str | None = None
     plan_type: str
+    subscription_expires_at: datetime | None = None
     status: str
 
 

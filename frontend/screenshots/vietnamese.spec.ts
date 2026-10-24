@@ -25,7 +25,9 @@ async function preparePage(page: Page, theme: "light" | "dark", initialLanguage?
   await page.clock.setFixedTime(new Date(FIXED_TIME));
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.addInitScript(({ theme, initialLanguage }) => {
-    localStorage.setItem("codex-lb-theme", theme);
+    if (localStorage.getItem("codex-lb-theme") === null) {
+      localStorage.setItem("codex-lb-theme", theme);
+    }
     if (initialLanguage && localStorage.getItem("codex-lb-language") === null) {
       localStorage.setItem("codex-lb-language", initialLanguage);
     }
@@ -39,7 +41,7 @@ async function preparePage(page: Page, theme: "light" | "dark", initialLanguage?
   const accounts = [
     createAccountSummary({
       accountId: "demo-30-days", email: "demo30@example.invalid", displayName: "Demo Plus",
-      subscriptionExpiresAt: "2026-01-31T12:00:00Z",
+      subscriptionExpiresAt: "2026-01-31T12:00:00Z", availableResetCredits: 2,
     }),
     createAccountSummary({
       accountId: "demo-3-days", email: "demo3@example.invalid", displayName: "Demo Pro",
@@ -103,6 +105,31 @@ async function expectLanguage(page: Page, language: string) {
 async function expectNoPageOverflow(page: Page) {
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 }
+
+test("header theme switch toggles, persists and supports keyboard", async ({ page }, testInfo) => {
+  const { errors, unexpected } = await preparePage(page, "light", "vi");
+  await page.goto(`${BASE_URL}/accounts`);
+  await expect(page.getByTestId("account-card-grid")).toBeVisible();
+  const toggle = page.getByRole("switch", { name: "Chủ đề: Tối", exact: true });
+  await expect(toggle).not.toBeChecked();
+  await toggle.click();
+  await expect(toggle).toBeChecked();
+  await expect(page.locator("html")).toHaveClass(/dark/);
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("codex-lb-theme"))).toBe("dark");
+  await page.reload();
+  await expect(toggle).toBeChecked();
+  await toggle.focus();
+  await page.keyboard.press("Space");
+  await expect(toggle).not.toBeChecked();
+  await expect(page.locator("html")).not.toHaveClass(/dark/);
+  await expect(toggle).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(toggle).toBeChecked();
+  await expect(toggle).toBeFocused();
+  await page.screenshot({ path: testInfo.outputPath("theme-switch-dark.png") });
+  expect(errors).toEqual([]);
+  expect(unexpected).toEqual([]);
+});
 
 for (const theme of ["light", "dark"] as const) {
   test(`full-width header navigation: ${theme}`, async ({ page }, testInfo) => {
@@ -189,6 +216,20 @@ for (const theme of ["light", "dark"] as const) {
       }
       const proCard = page.locator("article").filter({ hasText: "Demo Pro" });
       await expect(proCard.getByText("3 ngày", { exact: true })).toBeVisible();
+      const plusCard = page.locator("article").filter({ hasText: "Demo Plus" });
+      await expect(plusCard.getByRole("button", { name: "Đặt lại (2)", exact: true })).toBeVisible();
+      const actionGrid = plusCard.getByRole("button", { name: "Xem chi tiết", exact: true }).locator("..");
+      expect(await actionGrid.evaluate((element) => {
+        const rows = new Map<number, number>();
+        for (const button of element.querySelectorAll(":scope > button")) {
+          const top = Math.round(button.getBoundingClientRect().top);
+          rows.set(top, (rows.get(top) ?? 0) + 1);
+        }
+        return Array.from(rows.values());
+      })).toEqual([2, 2, 3]);
+      expect(await actionGrid.locator(":scope > button").evaluateAll((buttons) =>
+        buttons.every((button) => button.scrollWidth <= button.clientWidth),
+      )).toBe(true);
       await expectNoPageOverflow(page);
       expect(await page.locator("article").evaluateAll((cards) =>
         cards.every((card) => card.scrollWidth <= card.clientWidth),
@@ -240,3 +281,215 @@ test("defaults to Vietnamese for an English browser and respects stored English"
   expect(errors).toEqual([]);
   expect(unexpected).toEqual([]);
 });
+
+for (const theme of ["light", "dark"] as const) {
+  for (const width of [1440, 390]) {
+    test(`auto-login modal: ${theme}, ${width}px`, async ({ page }, testInfo) => {
+      await page.setViewportSize({ width, height: 900 });
+      const { errors, unexpected } = await preparePage(page, theme, "vi");
+      await page.goto(`${BASE_URL}/accounts`);
+      await page.getByRole("button", { name: "Thêm tài khoản", exact: true }).click();
+      await page.getByRole("dialog").getByRole("button", { name: /Đăng nhập tự động/ }).click();
+      const dialog = page.getByRole("dialog", { name: "Đăng nhập tự động", exact: true });
+      await expect(dialog).toBeVisible();
+      const input = dialog.getByRole("textbox", { name: "Thông tin tài khoản", exact: true });
+      await expect(input).toBeFocused();
+      await expect(input).toHaveAccessibleDescription(/email.*password.*2FA/);
+      await expect(dialog.getByRole("button", { name: "Đăng nhập và nhập", exact: true })).toBeDisabled();
+      // Synthetic input only. Submission is intentionally never triggered.
+      const record = "demo.with.a.long.address@example.invalid|sample-password-for-layout-only|SAMPLE-2FA-SYNTHETIC";
+      await input.fill(`${record}\n${record}`);
+      const numbers = dialog.getByTestId("credential-record-numbers");
+      await expect(numbers.locator(":scope > div")).toHaveText(["1", "2"]);
+      await expect(input).toHaveAttribute("wrap", "off");
+      await expect(dialog.getByRole("button", { name: "Đăng nhập và nhập", exact: true })).toBeEnabled();
+      expect(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+      const bounds = await dialog.boundingBox();
+      if (width === 1440) {
+        expect(bounds!.width).toBeGreaterThanOrEqual(1000);
+        expect(await input.evaluate((element: HTMLTextAreaElement) => element.scrollWidth <= element.clientWidth)).toBe(true);
+      }
+      expect(bounds!.x).toBeGreaterThanOrEqual(16);
+      expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width - 16);
+      await page.screenshot({ path: testInfo.outputPath("auto-login-modal.png") });
+      await input.fill(Array.from({ length: 30 }, (_, index) =>
+        `${index === 0 ? "x".repeat(200) : "demo"}@example.invalid|sample-password|SAMPLE-2FA`,
+      ).join("\n"));
+      await input.evaluate((element: HTMLTextAreaElement) => {
+        element.scrollTop = 280;
+        element.scrollLeft = 150;
+        element.dispatchEvent(new Event("scroll", { bubbles: true }));
+      });
+      const scrollTop = await input.evaluate((element) => element.scrollTop);
+      expect(scrollTop).toBeGreaterThan(0);
+      await expect.poll(() => numbers.evaluate((element) => element.scrollTop)).toBe(scrollTop);
+      expect(await input.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0);
+      await page.setViewportSize({ width: 320, height: 480 });
+      await dialog.getByRole("button", { name: "Đăng nhập và nhập", exact: true }).scrollIntoViewIfNeeded();
+      await expect(dialog.getByRole("button", { name: "Đăng nhập và nhập", exact: true })).toBeInViewport();
+      const compactBounds = await dialog.boundingBox();
+      expect(compactBounds!.y).toBeGreaterThanOrEqual(15);
+      expect(compactBounds!.y + compactBounds!.height).toBeLessThanOrEqual(465);
+      expect(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+      await dialog.getByRole("button", { name: "Đóng", exact: true }).last().click();
+      await expect(dialog).not.toBeVisible();
+      await page.getByRole("button", { name: "Thêm tài khoản", exact: true }).click();
+      await page.getByRole("dialog").getByRole("button", { name: /Đăng nhập tự động/ }).click();
+      await expect(dialog.getByRole("textbox")).toHaveValue("");
+      await page.keyboard.press("Escape");
+      await expect(dialog).not.toBeVisible();
+      expect(errors).toEqual([]);
+      expect(unexpected).toEqual([]);
+    });
+  }
+}
+
+for (const theme of ["light", "dark"] as const) {
+  test(`Account title copies without opening details: ${theme}`, async ({ page, context }, testInfo) => {
+    const { errors, unexpected } = await preparePage(page, theme, "vi");
+    await context.grantPermissions(["clipboard-read", "clipboard-write"], { origin: BASE_URL });
+    await page.goto(`${BASE_URL}/accounts`);
+    const card = page.locator("article").filter({ hasText: "Demo Plus" });
+    const title = card.getByRole("button", { name: /Demo Plus$/, exact: false });
+    await title.click();
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe("Demo Plus");
+    const successToast = page.locator("[data-sonner-toast][data-type='success']").filter({ hasText: "Đã sao chép vào bộ nhớ tạm" });
+    await expect(successToast).toBeVisible();
+    await expect(page.getByRole("dialog")).not.toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath("account-title-copy-toast.png"), fullPage: true });
+    await expect(successToast).toHaveCount(0, { timeout: 10_000 });
+    await title.focus();
+    await page.keyboard.press("Enter");
+    await expect(successToast).toBeVisible();
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe("Demo Plus");
+    await expect(title).toBeFocused();
+    await expectNoPageOverflow(page);
+    await page.screenshot({ path: testInfo.outputPath("account-title-copy.png"), fullPage: true });
+    await card.getByRole("button", { name: "Xem chi tiết", exact: true }).click();
+    await expect(page.getByRole("dialog", { name: "Chi tiết tài khoản", exact: true })).toBeVisible();
+    expect(errors).toEqual([]);
+    expect(unexpected).toEqual([]);
+  });
+}
+
+for (const theme of ["light", "dark"] as const) {
+  test(`Inline card detail action: ${theme}`, async ({ page }, testInfo) => {
+    const { errors, unexpected } = await preparePage(page, theme, "vi");
+    await page.goto(`${BASE_URL}/accounts`);
+    const card = page.locator("article").filter({ hasText: "Demo Plus" });
+    const details = card.getByRole("button", { name: "Xem chi tiết", exact: true });
+    const dialog = page.getByRole("dialog", { name: "Chi tiết tài khoản", exact: true });
+    for (const width of [1440, 390]) {
+      await page.setViewportSize({ width, height: 1000 });
+      await expect(details).toHaveText("");
+      await expect(details).toHaveAttribute("title", "Xem chi tiết");
+      const grid = details.locator("..");
+      await expect(grid.getByRole("button", { name: "Xóa", exact: true })).toBeVisible();
+      expect(await grid.evaluate((element) => getComputedStyle(element).display)).toBe("grid");
+      await details.focus();
+      await page.keyboard.press("Enter");
+      await expect(dialog).toBeVisible();
+      await page.keyboard.press("Escape");
+      await expect(dialog).not.toBeVisible();
+      await expect(details).toBeFocused();
+      await details.click();
+      await expect(dialog).toBeVisible();
+      await page.keyboard.press("Escape");
+      await expect(dialog).not.toBeVisible();
+      await expect(details).toBeFocused();
+      await expectNoPageOverflow(page);
+      await page.screenshot({ path: testInfo.outputPath(`inline-details-${width}.png`), fullPage: true });
+    }
+    expect(errors).toEqual([]);
+    expect(unexpected).toEqual([]);
+  });
+
+  test(`Readable account action labels: ${theme}`, async ({ page }, testInfo) => {
+    const { errors, unexpected } = await preparePage(page, theme, "vi");
+    await page.route(`${BASE_URL}/api/accounts`, (route) => route.fulfill({
+      json: { accounts: [
+        createAccountSummary({ accountId: "demo-active", displayName: "Demo Plus", availableResetCredits: 2, limitWarmupEnabled: true }),
+        createAccountSummary({ accountId: "demo-reauth", displayName: "Demo Recovery", status: "reauth_required" }),
+        createAccountSummary({ accountId: "demo-paused", displayName: "Demo Paused", status: "paused" }),
+        createAccountSummary({ accountId: "demo-ready", displayName: "Demo Ready" }),
+      ] },
+    }));
+    await page.goto(`${BASE_URL}/accounts`);
+    await expect(page.locator("article")).toHaveCount(4);
+    for (const width of [1920, 1600, 1440, 1280, 1024, 768, 390, 375, 360, 320]) {
+      await page.setViewportSize({ width, height: 1000 });
+      const buttons = page.locator("article button[data-slot='button']");
+      await expect(buttons.first()).toBeVisible();
+      const issues = await buttons.evaluateAll((elements) => elements.flatMap((element) => {
+        const style = getComputedStyle(element);
+        const rect = element.getBoundingClientRect();
+        const range = document.createRange();
+        range.selectNodeContents(element);
+        const content = range.getBoundingClientRect();
+        return style.fontSize !== "14px" || Number(style.fontWeight) < 700 ||
+          element.scrollWidth > element.clientWidth + 1 || content.left < rect.left || content.right > rect.right
+          ? [{ label: element.textContent, fontSize: style.fontSize, fontWeight: style.fontWeight, width: rect.width, contentWidth: content.width }]
+          : [];
+      }));
+      expect(issues, `Action labels at ${width}px`).toEqual([]);
+      await expectNoPageOverflow(page);
+      if (width === 1920 || width === 390) {
+        await page.screenshot({ path: testInfo.outputPath(`account-actions-${width}.png`), fullPage: true });
+      }
+    }
+    expect(errors).toEqual([]);
+    expect(unexpected).toEqual([]);
+  });
+}
+
+for (const theme of ["light", "dark"] as const) {
+  test(`Status-colored account card borders: ${theme}`, async ({ page }, testInfo) => {
+    const { errors, unexpected } = await preparePage(page, theme, "vi");
+    const statuses = [
+      { status: "active", color: "emerald" },
+      { status: "paused", color: "amber" },
+      { status: "rate_limited", color: "orange" },
+      { status: "quota_exceeded", color: "red" },
+      { status: "reauth_required", color: "sky" },
+      { status: "deactivated", color: "zinc" },
+    ] as const;
+    const accounts = statuses.map(({ status }, index) => createAccountSummary({
+      accountId: `demo-status-${index}`, displayName: `Demo Status ${index}`, status,
+    }));
+    await page.route(`${BASE_URL}/api/accounts`, (route) => route.fulfill({ json: { accounts } }));
+    await page.goto(`${BASE_URL}/accounts?selected=demo-status-0`);
+    await expect(page.locator("article")).toHaveCount(6);
+    const checkBorder = async (index: number, color: string, selected = false) => {
+      const card = page.locator("article").filter({ hasText: `Demo Status ${index}` });
+      const colors = await card.evaluate((element, color) => {
+        const probe = document.createElement("div");
+        element.appendChild(probe);
+        probe.style.borderColor = `color-mix(in oklab, var(--color-${color}-500) 50%, transparent)`;
+        const expectedBorder = getComputedStyle(probe).borderTopColor;
+        probe.style.color = `color-mix(in oklab, var(--color-${color}-500) 25%, transparent)`;
+        const expectedRing = getComputedStyle(probe).color;
+        const style = getComputedStyle(element);
+        const result = { border: style.borderTopColor, expectedBorder, shadow: style.boxShadow, expectedRing };
+        probe.remove();
+        return result;
+      }, color);
+      expect(colors.border).toBe(colors.expectedBorder);
+      if (selected) expect(colors.shadow).toContain(colors.expectedRing);
+      await expect(card.getByRole("img")).toBeVisible();
+      await expect(card.getByRole("button", { name: "Xem chi tiết", exact: true })).toBeVisible();
+    };
+    for (const width of [1440, 390]) {
+      await page.setViewportSize({ width, height: 1000 });
+      for (const [index, { color }] of statuses.entries()) await checkBorder(index, color, index === 0);
+      await expectNoPageOverflow(page);
+      await page.screenshot({ path: testInfo.outputPath(`status-borders-${width}.png`), fullPage: true });
+    }
+    // Updated synthetic account data must replace the old border and selected ring.
+    accounts[0] = createAccountSummary({ ...accounts[0], status: "reauth_required" });
+    await page.reload();
+    await expect(page.locator("article")).toHaveCount(6);
+    await checkBorder(0, "sky", true);
+    expect(errors).toEqual([]);
+    expect(unexpected).toEqual([]);
+  });
+}

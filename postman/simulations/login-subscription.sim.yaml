@@ -1,0 +1,5 @@
+simulation: login-subscription
+routing: path
+mocks:
+  - routeKey: entitlement
+    path: ../mocks/chatgpt-entitlement/config.yaml
