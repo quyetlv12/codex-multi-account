@@ -383,12 +383,12 @@ The system SHALL support an optional limit warm-up mechanism that is disabled by
 - **GIVEN** limit warm-up and staggered idle warm-up are enabled globally
 - **AND** multiple active accounts are opted into limit warm-up
 - **AND** an opted-in account has a healthy idle short-window primary usage sample (any sample reporting a duration over 24 hours is not eligible) with `used_percent` at or below the configured `limit_warmup_idle_threshold_percent`
-- **AND** no prior warm-up attempt places the account inside the configured cooldown
+- **AND** no prior warm-up attempt places the account inside the greater of the configured cooldown and the observed primary window duration
 - **AND** the usage sample was refreshed for the current cycle
-- **WHEN** background usage refresh evaluates that account inside its deterministic stagger slot
-- **THEN** the system MUST attempt to send one minimal upstream warm-up request for that account's current rolling-window cycle, whose length is the account's observed primary window duration (defaulting to 300 minutes when duration metadata is missing)
+- **WHEN** background usage refresh evaluates that account at or after its deterministic stagger slot before the local scheduling cycle ends
+- **THEN** the system MUST attempt to send one minimal upstream warm-up request for that account's UTC epoch-aligned scheduling cycle, whose length is the account's observed primary window duration (defaulting to 300 minutes when duration metadata is missing)
 - **AND** the system MUST NOT send another staggered idle warm-up for that same account/cycle tuple
-- **AND** account slots MUST be spread deterministically across the account's rolling window so restarts do not align all opted-in accounts into the same phase
+- **AND** account slots MUST be spread deterministically across the local scheduling cycle independently of upstream reset deadlines
 
 #### Scenario: Staggered idle warm-up is skipped for accounts with real usage
 - **GIVEN** staggered idle warm-up is enabled globally
@@ -1644,3 +1644,46 @@ Auth Guardian MUST preserve stable account identities while its candidate-query 
 - **THEN** Auth Guardian refreshes the selected account without a detached-instance failure
 - **AND** the refresh worker re-reads the account in its own session before refreshing it
 
+
+
+### Requirement: Idle pre-start scheduling survives sliding upstream deadlines
+
+Idle warm-up MUST use deterministic account slots in UTC epoch-aligned cycles
+of the observed primary window duration (300 minutes if absent). Its cycle and
+durable `primary_idle` attempt key MUST be independent of upstream reset times.
+Upstream quota metadata MUST remain unchanged.
+
+#### Scenario: Sliding relative reset cannot starve later account slots
+- **GIVEN** several opted-in active accounts report fresh idle primary samples
+- **AND** each sample advances its reset deadline to observation time plus five hours
+- **WHEN** each account's deterministic UTC slot is reached
+- **THEN** each eligible account can produce one idle attempt
+- **AND** moving upstream deadlines do not create new attempt keys in that cycle
+
+### Requirement: Idle pre-start catches up without repeated sends
+
+A fresh eligible idle sample observed at or after its slot MUST remain due until
+the scheduling cycle ends. Idle attempts MUST be separated by at least the
+greater of the configured cooldown and the observed window duration, including
+across scheduler restarts and cycle boundaries.
+
+#### Scenario: Restart catches up a missed slot
+- **GIVEN** an idle account has no recent attempt and its UTC slot has passed
+- **WHEN** a restarted scheduler records a fresh eligible sample in that cycle
+- **THEN** it attempts the idle pre-start once without waiting for another cycle
+
+#### Scenario: Cycle boundary does not duplicate an idle pre-start
+- **GIVEN** an idle attempt occurred late in the previous UTC cycle
+- **WHEN** a new cycle's account slot arrives before one observed window duration has elapsed
+- **THEN** no idle attempt is sent until the minimum spacing has elapsed
+
+### Requirement: Idle catch-up preserves warm-up safety gates
+
+The global and account opt-ins, active status, idle threshold, fresh sample,
+unexpired upstream reset deadline, model eligibility and durable claim MUST
+continue to gate idle sends. Reset-confirmed warm-up MUST retain its existing
+evidence and deduplication rules.
+
+#### Scenario: Expired or stale evidence cannot pre-start
+- **WHEN** the latest primary evidence predates the current refresh or its upstream reset is elapsed
+- **THEN** no idle pre-start is attempted

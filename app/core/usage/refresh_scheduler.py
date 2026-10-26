@@ -288,7 +288,6 @@ class UsageRefreshScheduler:
                         ),
                         previous_plan_types=previous_plan_types,
                         refresh_started_at=refresh_started_at,
-                        usage_refresh_interval_seconds=self.interval_seconds,
                     )
                 if cycle_complete:
                     await _invalidate_usage_refresh_caches()

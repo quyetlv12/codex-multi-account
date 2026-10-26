@@ -36,7 +36,6 @@ _QUOTA_ERROR_CODES = {"insufficient_quota", "quota_exceeded", "rate_limit_exceed
 _MAX_CONCURRENT_WARMUP_SENDS = 4
 _ROLLING_WINDOW_SECONDS = 300 * 60
 _SHORT_WINDOW_MAX_MINUTES = 24 * 60
-_STAGGER_SLOT_GRACE_SECONDS = 60
 _IDLE_PRIMARY_WINDOW = "primary_idle"
 # Minimum reset_at forward jump (in seconds) to confirm a real quota window reset.
 # Upstream timestamp jitter of ~1 second must not trigger a warm-up.
@@ -344,7 +343,6 @@ class LimitWarmupService:
         after_secondary: dict[str, UsageHistory],
         previous_plan_types: dict[str, str | None] | None = None,
         refresh_started_at: datetime | None = None,
-        usage_refresh_interval_seconds: int = _STAGGER_SLOT_GRACE_SECONDS,
     ) -> None:
         if not settings.limit_warmup_enabled:
             return
@@ -409,14 +407,16 @@ class LimitWarmupService:
                         now=now,
                         after_primary=after_primary,
                         refresh_started_at=refresh_started_at,
-                        usage_refresh_interval_seconds=usage_refresh_interval_seconds,
                         idle_threshold_percent=settings.limit_warmup_idle_threshold_percent,
                     )
                 if candidate is None:
                     continue
                 if candidate.window == _IDLE_PRIMARY_WINDOW and _in_cooldown(
                     latest_attempt,
-                    cooldown_seconds=settings.limit_warmup_cooldown_seconds,
+                    cooldown_seconds=max(
+                        settings.limit_warmup_cooldown_seconds,
+                        _rolling_window_seconds(after_primary[account.id]),
+                    ),
                 ):
                     continue
 
@@ -789,7 +789,6 @@ def _build_staggered_idle_candidate(
     now: datetime,
     after_primary: dict[str, UsageHistory],
     refresh_started_at: datetime | None,
-    usage_refresh_interval_seconds: int,
     idle_threshold_percent: float = 1.0,
 ) -> _WarmupCandidate | None:
     after = after_primary.get(account.id)
@@ -810,8 +809,6 @@ def _build_staggered_idle_candidate(
         [candidate.id for candidate in accounts],
         now=now,
         reset_at=after.reset_at,
-        interval_started_at=refresh_started_at,
-        usage_refresh_interval_seconds=usage_refresh_interval_seconds,
         window_seconds=window_seconds,
     )
     if due is None:
@@ -823,7 +820,7 @@ def _build_staggered_idle_candidate(
         window_seconds=window_seconds,
     ):
         return None
-    return _WarmupCandidate(reset_at=after.reset_at, window=_IDLE_PRIMARY_WINDOW)
+    return _WarmupCandidate(reset_at=due.cycle_end, window=_IDLE_PRIMARY_WINDOW)
 
 
 @dataclass(frozen=True, slots=True)
@@ -847,8 +844,6 @@ def _staggered_idle_due(
     *,
     now: datetime,
     reset_at: int,
-    interval_started_at: datetime | None = None,
-    usage_refresh_interval_seconds: int = _STAGGER_SLOT_GRACE_SECONDS,
     window_seconds: int = _ROLLING_WINDOW_SECONDS,
 ) -> _StaggeredIdleDue | None:
     if not account_ids:
@@ -860,18 +855,13 @@ def _staggered_idle_due(
         return None
 
     now_epoch = naive_utc_to_epoch(now)
-    cycle_start = reset_at - window_seconds
-    if now_epoch < cycle_start or now_epoch >= reset_at:
+    if now_epoch >= reset_at:
         return None
+    # Idle upstream deadlines may slide on every fetch; local slots must not.
+    cycle_start = (now_epoch // window_seconds) * window_seconds
     elapsed = now_epoch - cycle_start
     slot_offset = int(account_index * window_seconds / len(ordered_account_ids))
-    grace_seconds = max(_STAGGER_SLOT_GRACE_SECONDS, usage_refresh_interval_seconds)
-    interval_start_epoch = naive_utc_to_epoch(interval_started_at) if interval_started_at is not None else now_epoch
-    interval_start_epoch = min(interval_start_epoch, now_epoch)
-    interval_start_elapsed = max(0, interval_start_epoch - cycle_start)
     if not slot_offset <= elapsed:
-        return None
-    if slot_offset + grace_seconds <= interval_start_elapsed:
         return None
     return _StaggeredIdleDue(
         cycle_end=cycle_start + window_seconds,

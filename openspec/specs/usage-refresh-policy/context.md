@@ -109,3 +109,25 @@ does not count as evidence that the account is healthy.
 
 - [#676 - initial bug report on `/wham/usage` vs. Settings UI divergence](https://github.com/Soju06/codex-lb/issues/676)
 - [#677 - dashboard per-account force-probe action](https://github.com/Soju06/codex-lb/issues/677)
+
+## Idle pre-start scheduling
+
+Unused accounts can keep returning a full relative reset duration, so their
+computed upstream deadline advances on every observation. Scheduling idle
+pre-starts against that deadline starves later account slots. Idle scheduling
+therefore uses local UTC epoch-aligned cycles; reset-confirmed warm-up and
+upstream quota timestamps retain their existing meaning.
+
+For example, three opted-in accounts with a 300-minute primary window have
+slots at offsets 0, 100 and 200 minutes. A fresh sample after a missed slot can
+catch up before the local cycle ends. The durable attempt key is the local
+cycle end, while minimum spacing uses the greater of configured cooldown and
+observed window duration. A late catch-up cannot cause another send immediately
+after the next UTC boundary.
+
+A service restart can catch up several overdue accounts, with sends bounded by
+the existing concurrency limit. Failed or unavailable-model attempts remain
+subject to durable deduplication and minimum spacing; they are not retried on
+every usage refresh. UI quota can still round to 100 percent after a small
+request; a successful warm-up log and subsequent upstream observations provide
+separate evidence of sending and limiter behavior.

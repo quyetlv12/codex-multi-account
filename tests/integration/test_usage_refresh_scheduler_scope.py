@@ -14,12 +14,77 @@ from app.core.utils.time import utcnow
 from app.db.models import Account, AccountStatus, UsageHistory
 from app.db.session import SessionLocal
 from app.modules.accounts.repository import AccountsRepository
+from app.modules.limit_warmup import service as limit_warmup_service
 from app.modules.limit_warmup.repository import LimitWarmupRepository
 from app.modules.limit_warmup.service import LimitWarmupSendResult
 from app.modules.settings.repository import SettingsRepository
 from app.modules.usage.repository import UsageRepository
 
 pytestmark = pytest.mark.integration
+
+
+@pytest.mark.asyncio
+async def test_scheduler_prestarts_sliding_idle_windows_and_dedupes_after_restart(db_setup, monkeypatch) -> None:
+    del db_setup
+    accounts = [_account(f"acc_idle_{index}", status=AccountStatus.ACTIVE) for index in range(3)]
+    async with SessionLocal() as session:
+        for account in accounts:
+            await AccountsRepository(session).upsert(account)
+        await SettingsRepository(session).update(
+            limit_warmup_enabled=True,
+            limit_warmup_staggered_idle_enabled=True,
+            limit_warmup_model="gpt-5.1-codex-mini",
+            limit_warmup_windows="primary",
+            limit_warmup_cooldown_seconds=0,
+        )
+
+    class _Leader:
+        async def run_if_leader(self, fn: Callable[[], Awaitable[object]]) -> object:
+            return await fn()
+
+    class _Updater:
+        async def refresh_accounts(self, selected: list[Account], latest_usage: dict[str, UsageHistory]) -> bool:
+            async with SessionLocal() as session:
+                await UsageRepository(session).add_entry(
+                    selected[0].id,
+                    0.0,
+                    window="primary",
+                    recorded_at=now,
+                    reset_at=epoch + 18_000,
+                    window_minutes=300,
+                )
+            return True
+
+    class _Sender:
+        def __init__(self) -> None:
+            self.calls: list[str] = []
+
+        async def send(self, target: Account, *, model: str, prompt: str) -> LimitWarmupSendResult:
+            self.calls.append(target.id)
+            return LimitWarmupSendResult(request_id=f"idle-{target.id}", success=True, latency_ms=1)
+
+    sender = _Sender()
+    monkeypatch.setattr(refresh_scheduler_module, "_get_leader_election", lambda: _Leader())
+    monkeypatch.setattr(refresh_scheduler_module, "build_background_usage_updater", lambda: _Updater())
+    monkeypatch.setattr(refresh_scheduler_module, "StreamingLimitWarmupSender", lambda *_args, **_kwargs: sender)
+    for epoch in (1_800_012_600, 1_800_012_660):
+        now = datetime.fromtimestamp(epoch, timezone.utc).replace(tzinfo=None)
+        monkeypatch.setattr(limit_warmup_service, "utcnow", lambda: now)
+        monkeypatch.setattr(refresh_scheduler_module.usage_updater_module, "utcnow", lambda: now)
+        scheduler = refresh_scheduler_module.UsageRefreshScheduler(interval_seconds=60, enabled=True)
+        for _ in accounts:
+            await scheduler._refresh_once()
+
+    assert sorted(sender.calls) == [account.id for account in accounts]
+    async with SessionLocal() as session:
+        attempts = await LimitWarmupRepository(session).latest_by_account([account.id for account in accounts])
+        usage = await UsageRepository(session).latest_by_account(window="primary")
+    assert set(attempts) == {account.id for account in accounts}
+    assert all(
+        (row.window, row.reset_at, row.status) == ("primary_idle", 1_800_018_000, "succeeded")
+        for row in attempts.values()
+    )
+    assert all(sample.reset_at == 1_800_030_660 for sample in usage.values())
 
 
 def _account(

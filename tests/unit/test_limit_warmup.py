@@ -1350,9 +1350,9 @@ def test_staggered_idle_slot_is_stable_and_spread() -> None:
 def test_staggered_idle_slot_uses_observed_window_duration() -> None:
     # A 60-minute observed window spreads slots across 3600 seconds instead
     # of the 300-minute fallback.
-    reset_at = 10_000
+    reset_at = 10_800
     window_seconds = 3_600
-    window_start = reset_at - window_seconds
+    window_start = 7_200
 
     first = limit_warmup_service._staggered_idle_due(
         "acc_1",
@@ -1369,9 +1369,9 @@ def test_staggered_idle_slot_uses_observed_window_duration() -> None:
         window_seconds=window_seconds,
     )
     outside = limit_warmup_service._staggered_idle_due(
-        "acc_1",
+        "acc_3",
         ["acc_1", "acc_2", "acc_3"],
-        now=datetime.fromtimestamp(window_start - 1, tz=timezone.utc).replace(tzinfo=None),
+        now=datetime.fromtimestamp(window_start + 1_200, tz=timezone.utc).replace(tzinfo=None),
         reset_at=reset_at,
         window_seconds=window_seconds,
     )
@@ -1384,9 +1384,9 @@ def test_staggered_idle_slot_uses_observed_window_duration() -> None:
     assert outside is None
 
 
-def test_staggered_idle_slot_uses_account_reset_window() -> None:
+def test_staggered_idle_slot_is_independent_of_upstream_deadline() -> None:
     reset_at = 20_000
-    window_start = reset_at - 18_000
+    window_start = 0
 
     before_slot = limit_warmup_service._staggered_idle_due(
         "acc_2",
@@ -1403,8 +1403,87 @@ def test_staggered_idle_slot_uses_account_reset_window() -> None:
 
     assert before_slot is None
     assert at_slot is not None
-    assert at_slot.cycle_end == reset_at
+    assert at_slot.cycle_end == 18_000
     assert at_slot.slot_offset_seconds == 6_000
+
+
+@pytest.mark.asyncio
+async def test_sliding_idle_deadlines_send_each_account_once_after_restart(monkeypatch) -> None:
+    repo = FakeWarmupRepo()
+    sender = FakeSender()
+    accounts = [_account(f"acc_{index}") for index in range(1, 4)]
+    settings = _settings(limit_warmup_staggered_idle_enabled=True, limit_warmup_cooldown_seconds=0)
+
+    # Each refresh reports a full five hours, including after the slot was missed.
+    for epoch in (60, 6_600, 12_600, 12_660):
+        now = datetime.fromtimestamp(epoch, timezone.utc).replace(tzinfo=None)
+        monkeypatch.setattr(limit_warmup_service, "utcnow", lambda: now)
+        service = LimitWarmupService(repo, FakeRequestLogsRepo(), sender=sender)
+        samples = {
+            account.id: _usage(account.id, used_percent=0, reset_at=epoch + 18_000, recorded_at=now)
+            for account in accounts
+        }
+        await service.run_after_usage_refresh(
+            accounts=accounts,
+            settings=settings,
+            before_primary=samples,
+            before_secondary={},
+            after_primary=samples,
+            after_secondary={},
+            refresh_started_at=now,
+        )
+        assert all(sample.reset_at == epoch + 18_000 for sample in samples.values())
+
+    assert sender.calls == [(account.id, "gpt-5.1-codex-mini") for account in accounts]
+    assert [(row.account_id, row.window, row.reset_at) for row in repo.rows] == [
+        (account.id, "primary_idle", 18_000) for account in accounts
+    ]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("cooldown", [0, 36_000])
+async def test_idle_catch_up_respects_spacing_across_cycle_boundary(monkeypatch, cooldown: int) -> None:
+    repo = FakeWarmupRepo()
+    sender = FakeSender()
+    account = _account()
+    spacing = max(cooldown, 18_000)
+    for epoch, expected_sends in ((17_900, 1), (18_001, 1), (17_900 + spacing - 1, 1), (17_900 + spacing, 2)):
+        now = datetime.fromtimestamp(epoch, timezone.utc).replace(tzinfo=None)
+        monkeypatch.setattr(limit_warmup_service, "utcnow", lambda: now)
+        service = LimitWarmupService(repo, FakeRequestLogsRepo(), sender=sender)
+        sample = _usage(account.id, used_percent=0, reset_at=epoch + 18_000, recorded_at=now)
+        await service.run_after_usage_refresh(
+            accounts=[account],
+            settings=_settings(limit_warmup_staggered_idle_enabled=True, limit_warmup_cooldown_seconds=cooldown),
+            before_primary={account.id: sample},
+            before_secondary={},
+            after_primary={account.id: sample},
+            after_secondary={},
+            refresh_started_at=now,
+        )
+        assert len(sender.calls) == expected_sends
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("reset_at", [5_999, 6_000])
+async def test_idle_catch_up_rejects_expired_upstream_deadline(monkeypatch, reset_at: int) -> None:
+    now = datetime.fromtimestamp(6_000, timezone.utc).replace(tzinfo=None)
+    monkeypatch.setattr(limit_warmup_service, "utcnow", lambda: now)
+    repo = FakeWarmupRepo()
+    sender = FakeSender()
+    account = _account()
+    sample = _usage(account.id, used_percent=0, reset_at=reset_at, recorded_at=now)
+    await LimitWarmupService(repo, FakeRequestLogsRepo(), sender=sender).run_after_usage_refresh(
+        accounts=[account],
+        settings=_settings(limit_warmup_staggered_idle_enabled=True),
+        before_primary={account.id: sample},
+        before_secondary={},
+        after_primary={account.id: sample},
+        after_secondary={},
+        refresh_started_at=now,
+    )
+    assert sender.calls == []
+    assert repo.rows == []
 
 
 @pytest.mark.asyncio
@@ -1693,7 +1772,7 @@ async def test_staggered_idle_warmup_dedupes_across_reset_at_jitter(monkeypatch)
     accounts = [_account("acc_1"), _account("acc_2"), _account("acc_3")]
     account = accounts[1]
 
-    # Disable cooldown so the second refresh actually reaches the dedupe path
+    # The per-window spacing still applies when the configured cooldown is zero.
     settings = _settings(limit_warmup_staggered_idle_enabled=True, limit_warmup_cooldown_seconds=0)
 
     # First refresh: reset_at = 18000
@@ -1719,8 +1798,7 @@ async def test_staggered_idle_warmup_dedupes_across_reset_at_jitter(monkeypatch)
         after_secondary={},
     )
 
-    # Should NOT create a second attempt — the persisted first reset is within
-    # the staggered-idle tolerance of the refreshed value.
+    # The internal scheduling cycle stays stable despite upstream jitter.
     assert len(sender.calls) == 1
     assert len(repo.rows) == 1
     assert repo.rows[0].reset_at == 18000
@@ -1751,7 +1829,7 @@ async def test_staggered_idle_warmup_dedupe_has_no_minute_boundary(monkeypatch) 
 
     assert len(sender.calls) == 1
     assert len(repo.rows) == 1
-    assert repo.rows[0].reset_at == 18_059
+    assert repo.rows[0].reset_at == 18_000
 
 
 @pytest.mark.asyncio
@@ -1868,7 +1946,6 @@ async def test_staggered_idle_warmup_catches_slot_between_refresh_ticks(monkeypa
         after_primary={account.id: _usage(account.id, used_percent=0, reset_at=18_000, recorded_at=now)},
         after_secondary={},
         refresh_started_at=now - timedelta(seconds=5),
-        usage_refresh_interval_seconds=120,
     )
 
     assert sender.calls == [(account.id, "gpt-5.1-codex-mini")]
@@ -1894,7 +1971,6 @@ async def test_staggered_idle_warmup_catches_slot_during_long_refresh(monkeypatc
         after_primary={account.id: _usage(account.id, used_percent=0, reset_at=18_000, recorded_at=now)},
         after_secondary={},
         refresh_started_at=datetime.fromtimestamp(5995, tz=timezone.utc).replace(tzinfo=None),
-        usage_refresh_interval_seconds=60,
     )
 
     assert sender.calls == [(account.id, "gpt-5.1-codex-mini")]
@@ -1935,7 +2011,7 @@ async def test_staggered_idle_warmup_requires_current_refresh_sample(monkeypatch
 
 @pytest.mark.asyncio
 async def test_staggered_idle_warmup_rejects_stale_entry_from_prior_cycle(monkeypatch) -> None:
-    now = datetime.fromtimestamp(18100, tz=timezone.utc).replace(tzinfo=None)
+    now = datetime.fromtimestamp(24100, tz=timezone.utc).replace(tzinfo=None)
     stale_recorded_at = datetime.fromtimestamp(11990, tz=timezone.utc).replace(tzinfo=None)
     monkeypatch.setattr(limit_warmup_service, "utcnow", lambda: now)
     repo = FakeWarmupRepo()
@@ -1959,7 +2035,6 @@ async def test_staggered_idle_warmup_rejects_stale_entry_from_prior_cycle(monkey
         },
         after_secondary={},
         refresh_started_at=None,
-        usage_refresh_interval_seconds=120,
     )
 
     assert sender.calls == []
