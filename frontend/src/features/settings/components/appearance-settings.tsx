@@ -89,7 +89,7 @@ export function AppearanceSettings() {
                   aria-pressed={preference === value}
                   onClick={() => setTheme(value)}
                   className={cn(
-                    "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors duration-200",
+                    "selection-control flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors duration-200",
                     preference === value
                       ? "bg-background text-foreground shadow-[var(--shadow-xs)]"
                       : "text-muted-foreground hover:text-foreground",
@@ -115,7 +115,7 @@ export function AppearanceSettings() {
                   aria-pressed={timeFormat === value}
                   onClick={() => setTimeFormat(value)}
                   className={cn(
-                    "rounded-md px-3 py-1.5 text-left text-xs font-medium transition-colors duration-200",
+                    "selection-control rounded-md px-3 py-1.5 text-left text-xs font-medium transition-colors duration-200",
                     timeFormat === value
                       ? "bg-background text-foreground shadow-[var(--shadow-xs)]"
                       : "text-muted-foreground hover:text-foreground",
@@ -140,7 +140,7 @@ export function AppearanceSettings() {
                   aria-pressed={dateDisplayFormat === value}
                   onClick={() => setDateDisplayFormat(value)}
                   className={cn(
-                    "rounded-md px-3 py-1.5 text-left text-xs font-medium transition-colors duration-200",
+                    "selection-control rounded-md px-3 py-1.5 text-left text-xs font-medium transition-colors duration-200",
                     dateDisplayFormat === value
                       ? "bg-background text-foreground shadow-[var(--shadow-xs)]"
                       : "text-muted-foreground hover:text-foreground",
@@ -166,7 +166,7 @@ export function AppearanceSettings() {
                   title={t(descriptionKey)}
                   onClick={() => setQuotaDisplay(value)}
                   className={cn(
-                    "rounded-md px-3 py-1.5 text-left text-xs font-medium transition-colors duration-200",
+                    "selection-control rounded-md px-3 py-1.5 text-left text-xs font-medium transition-colors duration-200",
                     quotaDisplay === value
                       ? "bg-background text-foreground shadow-[var(--shadow-xs)]"
                       : "text-muted-foreground hover:text-foreground",

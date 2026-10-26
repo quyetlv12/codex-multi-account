@@ -53,6 +53,10 @@ async function preparePage(page: Page, theme: "light" | "dark", initialLanguage?
     }),
   ];
   const responses: Record<string, unknown> = {
+    "/api/automations": { items: [], total: 0, hasMore: false },
+    "/api/automations/options": { accountIds: [], models: [], statuses: [], scheduleTypes: [] },
+    "/api/automations/runs": { items: [], total: 0, hasMore: false },
+    "/api/automations/runs/options": { accountIds: [], models: [], statuses: [], triggers: [] },
     "/health": { status: "ok" },
     "/api/dashboard-auth/session": createDashboardAuthSession(),
     "/api/accounts": { accounts },
@@ -492,4 +496,116 @@ for (const theme of ["light", "dark"] as const) {
     expect(errors).toEqual([]);
     expect(unexpected).toEqual([]);
   });
+}
+
+function contrast(first: string, second: string) {
+  const luminance = (color: string) => {
+    const channels = color.match(/[\d.]+/g)!.slice(0, 3).map((value) => {
+      const channel = Number(value) / 255;
+      return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+    });
+    return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
+  };
+  const a = luminance(first);
+  const b = luminance(second);
+  return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+}
+
+for (const theme of ["dark", "light"] as const) {
+  for (const width of [1440, 390]) {
+    test(`selected controls remain distinct: ${theme}, ${width}px`, async ({ page }, testInfo) => {
+      await page.setViewportSize({ width, height: 1000 });
+      const { errors, unexpected } = await preparePage(page, theme, "vi");
+      await page.goto(`${BASE_URL}/automations`);
+      await page.getByRole("button", { name: "Thêm tự động hóa", exact: true }).click();
+      const dialog = page.getByRole("dialog");
+      await dialog.getByLabel("Tên", { exact: true }).fill("Kiểm tra độ tương phản");
+      await page.keyboard.press("Tab");
+      const days = dialog.getByRole("group", { name: "Các ngày trong tuần", exact: true });
+      const day = days.getByRole("button").first();
+      await expect(day).toHaveAttribute("aria-pressed", "true");
+      const colors = () => day.evaluate((element) => {
+        const style = getComputedStyle(element);
+        // Composite translucent outline fills over their ancestors before measuring contrast.
+        const canvas = document.createElement("canvas");
+        canvas.width = canvas.height = 1;
+        const context = canvas.getContext("2d")!;
+        const ancestors: Element[] = [];
+        for (let current: Element | null = element; current; current = current.parentElement) ancestors.unshift(current);
+        for (const ancestor of ancestors) {
+          context.fillStyle = getComputedStyle(ancestor).backgroundColor;
+          context.fillRect(0, 0, 1, 1);
+        }
+        const [red, green, blue] = context.getImageData(0, 0, 1, 1).data;
+        return { background: `rgb(${red}, ${green}, ${blue})`, text: style.color, focus: style.boxShadow };
+      });
+      await page.mouse.move(0, 0);
+      const selected = await colors();
+      await day.scrollIntoViewIfNeeded();
+      await day.click();
+      await expect(day).toHaveAttribute("aria-pressed", "false");
+      await page.mouse.move(0, 0);
+      const unselected = await colors();
+      if (theme === "dark") {
+        const baseline = await page.addStyleTag({ content: ".dark .selection-control { background-color: revert-layer; border-color: revert-layer; color: revert-layer; }" });
+        await days.screenshot({ path: testInfo.outputPath("weekdays-before.png") });
+        await baseline.evaluate((element) => element.remove());
+        await days.screenshot({ path: testInfo.outputPath("weekdays-after.png") });
+      }
+      await day.focus();
+      await page.keyboard.press("Space");
+      await expect(day).toHaveAttribute("aria-pressed", "true");
+      await expect(day).toBeFocused();
+      expect((await colors()).focus).not.toBe("none");
+      await day.hover();
+      const hovered = await colors();
+      await page.screenshot({ path: testInfo.outputPath("selected-weekdays.png"), fullPage: true });
+      if (theme === "dark") {
+        expect(contrast(selected.background, unselected.background)).toBeGreaterThanOrEqual(3);
+        expect(contrast(selected.background, selected.text)).toBeGreaterThanOrEqual(4.5);
+        expect(hovered.background).toBe(selected.background);
+        expect(contrast(hovered.background, hovered.text)).toBeGreaterThanOrEqual(4.5);
+      } else {
+        expect(selected.background).not.toBe(unselected.background);
+      }
+      expect(await days.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+      await page.keyboard.press("Escape");
+      await page.goto(`${BASE_URL}/settings`);
+      if (theme === "dark") {
+        const appearance = page.getByRole("button", { name: "Tối", exact: true });
+        await expect(appearance).toHaveAttribute("aria-pressed", "true");
+        const colors = await appearance.evaluate((element) => {
+          const style = getComputedStyle(element);
+          return { background: style.backgroundColor, text: style.color };
+        });
+        expect(contrast(colors.background, colors.text)).toBeGreaterThanOrEqual(4.5);
+        await page.getByRole("button", { name: "Hiện cài đặt nâng cao", exact: true }).click();
+        const routing = page.locator("button.selection-control[aria-pressed='true']").filter({ has: page.locator("span.text-xs") }).first();
+        const routingColors = await routing.evaluate((element) => ({
+          background: getComputedStyle(element).backgroundColor,
+          labels: [...element.querySelectorAll(":scope > span")].map((span) => getComputedStyle(span).color),
+        }));
+        for (const label of routingColors.labels) expect(contrast(routingColors.background, label)).toBeGreaterThanOrEqual(4.5);
+        await page.getByRole("button", { name: "Ẩn cài đặt nâng cao", exact: true }).click();
+        if (width >= 1280) {
+          const activeNav = page.getByRole("banner").getByRole("link", { name: "Cài đặt", exact: true });
+          const navColors = await activeNav.evaluate((element) => {
+            const style = getComputedStyle(element);
+            return { background: style.backgroundColor, text: style.color };
+          });
+          expect(navColors.background).toBe(colors.background);
+          expect(contrast(navColors.background, navColors.text)).toBeGreaterThanOrEqual(4.5);
+        } else {
+          await page.getByRole("button", { name: "Mở menu", exact: true }).click();
+          const activeNav = page.getByRole("dialog").getByRole("link", { name: "Cài đặt", exact: true }).locator(":scope > span");
+          await expect(activeNav).toHaveCSS("background-color", colors.background);
+          await page.keyboard.press("Escape");
+        }
+      }
+      await expectNoPageOverflow(page);
+      await page.screenshot({ path: testInfo.outputPath("selected-settings.png"), fullPage: true });
+      expect(errors).toEqual([]);
+      expect(unexpected).toEqual([]);
+    });
+  }
 }

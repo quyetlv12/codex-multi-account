@@ -169,6 +169,14 @@
   }
 }
 
+/* Keep selected controls distinct from dark outline/ghost defaults, including hover. */
+.dark .selection-control:is([aria-pressed="true"], [role="radio"][aria-checked="true"]),
+.dark .selection-active {
+  background-color: var(--primary);
+  border-color: var(--primary);
+  color: var(--primary-foreground);
+}
+
 /* Shimmer animation for skeletons */
 @keyframes shimmer {
   0% { background-position: -200% 0; }

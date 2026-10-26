@@ -469,7 +469,7 @@ export function RoutingSettings({
                       save({ routingStrategy: strategyValue as DashboardSettings["routingStrategy"] });
                     }}
                     className={cn(
-                      "space-y-0.5 rounded-md border p-2 text-left text-xs transition-colors",
+                      "selection-control space-y-0.5 rounded-md border p-2 text-left text-xs transition-colors",
                       isSelected
                         ? "border-primary/40 bg-primary/5"
                         : "border-border/40 hover:border-border hover:bg-muted/30",
@@ -477,11 +477,11 @@ export function RoutingSettings({
                     )}
                     aria-pressed={isSelected}
                   >
-                    <span className="flex items-center gap-1.5 font-medium text-foreground text-xs">
-                      {isSelected && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary" aria-hidden="true" />}
+                    <span className={cn("flex items-center gap-1.5 font-medium text-foreground text-xs", isSelected && "dark:text-primary-foreground")}>
+                      {isSelected && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary dark:bg-primary-foreground" aria-hidden="true" />}
                       {t(`settings.routing.strategy.${strategy}`)}
                     </span>
-                    <span className="block pl-3 text-muted-foreground text-xs">{t(`settings.routing.strategy.guide.${strategy}`)}</span>
+                    <span className={cn("block pl-3 text-muted-foreground text-xs", isSelected && "dark:text-primary-foreground")}>{t(`settings.routing.strategy.guide.${strategy}`)}</span>
                   </button>
                 );
               })}

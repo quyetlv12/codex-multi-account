@@ -37,7 +37,7 @@ export function AccountViewModeToggle({ value, onChange }: AccountViewModeToggle
             title={label}
             onClick={() => onChange(option.value)}
             className={cn(
-              "inline-flex h-6 w-7 items-center justify-center rounded-[5px] text-muted-foreground transition-colors",
+              "selection-control inline-flex h-6 w-7 items-center justify-center rounded-[5px] text-muted-foreground transition-colors",
               selected
                 ? "bg-accent text-accent-foreground shadow-sm"
                 : "hover:bg-accent/60 hover:text-accent-foreground",

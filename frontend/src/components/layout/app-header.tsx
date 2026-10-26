@@ -116,7 +116,7 @@ export function AppHeader({
                 cn(
                   "relative inline-flex h-7 items-center rounded-md px-3.5 text-xs leading-none font-medium transition-colors duration-200",
                   isActive
-                    ? "bg-background text-foreground shadow-[var(--shadow-xs)]"
+                    ? "selection-active bg-background text-foreground shadow-[var(--shadow-xs)]"
                     : "text-muted-foreground hover:text-foreground",
                 )
               }
@@ -138,7 +138,7 @@ export function AppHeader({
               className={cn(
                 "relative inline-flex h-7 items-center gap-2 whitespace-nowrap rounded-md px-3.5 text-xs leading-none font-medium transition-colors duration-200",
                 advancedActive
-                  ? "bg-background text-foreground shadow-[var(--shadow-xs)]"
+                  ? "selection-active bg-background text-foreground shadow-[var(--shadow-xs)]"
                   : "text-muted-foreground hover:text-foreground",
               )}
             >
@@ -222,7 +222,7 @@ export function AppHeader({
                         className={cn(
                           "relative flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors",
                           isActive
-                            ? "bg-primary/10 text-primary"
+                            ? "selection-active bg-primary/10 text-primary"
                             : "text-muted-foreground hover:bg-muted hover:text-foreground",
                         )}
                       >
@@ -248,7 +248,7 @@ export function AppHeader({
                         className={cn(
                           "relative flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors",
                           isActive
-                            ? "bg-primary/10 text-primary"
+                            ? "selection-active bg-primary/10 text-primary"
                             : "text-muted-foreground hover:bg-muted hover:text-foreground",
                         )}
                       >
