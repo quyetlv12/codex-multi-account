@@ -95,7 +95,6 @@ from app.modules.proxy._service.http_bridge.service_stubs import (
     _maybe_rewrite_websocket_previous_response_not_found_event,
     _pop_matching_websocket_request_states,
     _pop_terminal_websocket_request_state,
-    _prepare_websocket_request_state_for_account_switch,
     _previous_response_id_from_not_found_message,
     _release_websocket_response_create_gate,
     _response_output_item_done_tool_call,
@@ -190,6 +189,10 @@ from app.modules.proxy._service.warmup import (
 )
 from app.modules.proxy._service.warmup import (
     _WarmupUsageSnapshot as _WarmupUsageSnapshot,
+)
+from app.modules.proxy._service.websocket.helpers import (
+    _install_verified_fresh_replay,
+    _websocket_owner_switch_has_other_pending_requests,
 )
 from app.modules.proxy.affinity import (
     _extract_model_class,
@@ -2440,8 +2443,24 @@ class _HTTPBridgeUpstreamEventsMixin:
                 and status_request_state.previous_response_id is not None
                 and status_request_state.preferred_account_id is not None
             ):
-                safe_request_text = _prepare_websocket_request_state_for_account_switch(status_request_state)
+                safe_request_text = None
+                async with session.pending_lock:
+                    if (
+                        not _websocket_owner_switch_has_other_pending_requests(
+                            status_request_state, session.pending_requests
+                        )
+                        and _websocket_request_can_replay_before_visible_output(status_request_state)
+                        and not status_request_state.file_required_preferred_account
+                        and status_request_state.replay_required_account_id is None
+                        and status_request_state.operation_id is None
+                    ):
+                        safe_request_text = _install_verified_fresh_replay(
+                            status_request_state,
+                            require_proxy_injected_previous_response_id=False,
+                        )
                 if safe_request_text is not None:
+                    status_request_state.hard_continuity_anchor = False
+                    quota_owner_id = session.account.id
                     previous_upstream_turn_state = session.upstream_turn_state
                     previous_downstream_turn_state = session.downstream_turn_state
                     session.upstream_turn_state = None
@@ -2459,15 +2478,23 @@ class _HTTPBridgeUpstreamEventsMixin:
                             session.queued_request_count += 1
                         status_request_state.awaiting_response_created = True
                         status_request_state.response_id = None
-                    retried = await self._retry_http_bridge_precreated_request(session)
+                    retried = await self._retry_http_bridge_precreated_request(
+                        session, request_state=status_request_state
+                    )
                     if retried:
                         return
-                    session.upstream_turn_state = previous_upstream_turn_state
-                    session.downstream_turn_state = previous_downstream_turn_state
+                    replacement_session_selected = session.account.id != quota_owner_id
+                    if not replacement_session_selected:
+                        session.upstream_turn_state = previous_upstream_turn_state
+                        session.downstream_turn_state = previous_downstream_turn_state
                     async with session.pending_lock:
                         if status_request_state in session.pending_requests:
                             session.pending_requests.remove(status_request_state)
                             session.queued_request_count = max(0, session.queued_request_count - 1)
+                    if replacement_session_selected:
+                        session.upstream_control.reconnect_requested = True
+                        session.upstream_control.retire_after_drain = True
+                        await self._retire_http_bridge_after_drain_if_ready(session)
                     status_request_state.error_http_status_override = 502
                     (
                         _downstream_text,

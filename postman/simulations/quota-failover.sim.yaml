@@ -1,0 +1,5 @@
+simulation: quota-failover
+routing: path
+mocks:
+  - routeKey: quota
+    path: ../mocks/quota-failover/config.yaml

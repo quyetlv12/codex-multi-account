@@ -3,7 +3,9 @@
 ## Purpose
 
 Define Responses API compatibility contracts so Codex, OpenCode, and OpenAI-style clients preserve expected behavior.
+
 ## Requirements
+
 ### Requirement: Use prompt_cache_key as OpenAI cache affinity
 For OpenAI-style `/v1/responses`, `/v1/responses/compact`, and chat-completions requests mapped onto Responses, the service MUST treat a non-empty `prompt_cache_key` as the bounded upstream account affinity key for prompt-cache correctness even when a `session_id` header is present. OpenAI-style route wiring MUST NOT upgrade those requests to durable `CODEX_SESSION` affinity by default. This affinity MUST apply even when dashboard `sticky_threads_enabled` is disabled, the service MUST continue forwarding the same `prompt_cache_key` upstream unchanged, and the stored affinity MUST expire after the configured freshness window so older keys can rebalance. The freshness window MUST come from dashboard settings so operators can adjust it without restart.
 
@@ -5454,3 +5456,67 @@ When the compact Responses upstream terminates with a top-level SSE `type=error`
 
 - **WHEN** compact upstream terminates with a nested OpenAI-style error envelope
 - **THEN** the proxy preserves the nested type and all other mapped fields using the existing parser
+
+### Requirement: Direct HTTP quota recovery uses verified portable history
+
+Before visible output, direct HTTP streaming MAY retry on another account after quota failure only when scoped retained history proves the full resend and its projection passes strict account-neutral validation. The exhausted owner MUST stay excluded. File and turn-state ownership, unknown hosted state, compaction, incomplete history, and already-visible output MUST block this recovery.
+
+#### Scenario: Verified unanchored history switches after quota exhaustion
+
+- **GIVEN** a full resend matches the exact stored session prefix and retains prior assistant output and new user input
+- **AND** known reasoning bookkeeping is the only nonportable content
+- **WHEN** the dispatch owner returns a pre-visible quota failure
+- **THEN** the proxy retries a strictly validated projected body on another eligible account
+- **AND** the failed owner stays excluded
+
+#### Scenario: Unverified history remains on its owner
+
+- **GIVEN** a full resend has no matching scoped history proof or contains account-scoped files or encrypted compaction
+- **WHEN** its owner fails
+- **THEN** no cross-account replay occurs
+
+### Requirement: Bridge tool continuation recovery verifies the durable manifest
+
+On an owner-unavailable failure, HTTP bridge recovery SHALL permit a portable full resend when its stored prefix matches the current durable lookup and its tool calls and outputs exactly match the prior response's pending-tool manifest. The failed owner SHALL remain excluded. If another request is pending on the shared bridge socket, recovery SHALL remain fail-closed to avoid interrupting that stream. Missing, mismatched or incomplete manifests, account-bound files, forwarded requests and nonportable history SHALL NOT gain cross-account replay eligibility.
+
+#### Scenario: Complete tool continuation switches accounts
+
+- **GIVEN** the client resends the verified stored prefix and all function or custom tool calls and outputs from the durable prior response
+- **WHEN** the owner is unavailable before dispatch
+- **THEN** the bridge uses another eligible account with the complete portable history and no previous response anchor
+- **AND** the failed owner remains excluded
+
+#### Scenario: Incomplete tool continuation stays fail-closed
+
+- **GIVEN** tool calls or outputs are missing or differ from the current durable manifest
+- **WHEN** the owner is unavailable
+- **THEN** no cross-account replay occurs
+
+### Requirement: Verified client resends recover from bridge owner quota
+
+The HTTP bridge SHALL permit verified account-neutral full resends to leave an exhausted owner before output, for client or proxy anchors. Recovery SHALL exclude that owner and retain bounded retries. Unverified history, account-bound files, ownership or operation pins, prior output and spent retries SHALL remain ineligible. General transport and authentication replay policy SHALL remain unchanged.
+
+#### Scenario: Verified client history survives owner exhaustion
+
+- **GIVEN** an unsent verified portable full resend with a client-provided prior-response anchor
+- **WHEN** its owner reports quota exhaustion before any output
+- **THEN** recovery submits the full history without the old anchor to another eligible account
+- **AND** the downstream request receives no intermediate quota error
+
+#### Scenario: Unsafe recovery preserves ownership
+
+- **GIVEN** missing full-history proof, account-bound content, a replay ownership pin, visible output, or a spent replay budget
+- **WHEN** its owner reports quota exhaustion
+- **THEN** no cross-account replay occurs and the existing terminal error path is retained
+
+#### Scenario: Replacement failure cannot inherit old owner metadata
+
+- **GIVEN** quota recovery has selected a replacement account
+- **WHEN** the replacement retry fails before completion
+- **THEN** the bridge retires the replacement session without restoring the exhausted owner's turn-state metadata
+
+#### Scenario: Multiplexed bridge sessions fail closed
+
+- **GIVEN** another request is still pending on the shared bridge socket
+- **WHEN** the current owner reports quota exhaustion
+- **THEN** the bridge keeps the request queued and does not reconnect or hand off the shared session

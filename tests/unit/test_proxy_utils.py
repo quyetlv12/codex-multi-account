@@ -6,6 +6,7 @@ import gc
 import hashlib
 import json
 import logging
+import os
 import socket
 import ssl
 import time
@@ -18,6 +19,7 @@ from types import SimpleNamespace
 from typing import Any, AsyncIterator, Iterator, Literal, Self, cast
 from unittest.mock import ANY, AsyncMock, MagicMock
 from unittest.mock import call as mock_call
+from urllib.parse import urlsplit
 
 import aiohttp
 import anyio
@@ -5721,6 +5723,8 @@ def _make_proxy_settings(*, trace_channels: frozenset[str] = frozenset()) -> Sim
     return SimpleNamespace(
         prefer_earlier_reset_accounts=False,
         prefer_earlier_reset_window="secondary",
+        prefer_subscription_expiry_accounts=False,
+        subscription_expiry_window_days=7,
         sticky_threads_enabled=False,
         sticky_reallocation_budget_threshold_pct=95.0,
         upstream_stream_transport="default",
@@ -36629,7 +36633,23 @@ async def test_stream_previous_response_owner_usage_limit_fails_closed(monkeypat
 
 
 @pytest.mark.asyncio
-async def test_stream_verified_fresh_replay_moves_off_owner_after_previsible_quota(monkeypatch):
+@pytest.mark.parametrize(
+    "replay_kind",
+    [
+        "local_anchor",
+        "durable_anchor",
+        "durable_unanchored",
+        "durable_unanchored_missing_proof",
+        "durable_unanchored_wrong_owner",
+        "durable_unanchored_compaction",
+        "durable_unanchored_visible",
+        "local_anchor_turn_state",
+        "durable_unanchored_turn_state",
+        "local_anchor_file_owner",
+        "durable_unanchored_file_owner",
+    ],
+)
+async def test_stream_verified_fresh_replay_moves_off_owner_after_previsible_quota(monkeypatch, replay_kind):
     settings = _make_proxy_settings()
     request_logs = _RequestLogsRecorder()
     service = proxy_service.ProxyService(_repo_factory(request_logs))
@@ -36637,12 +36657,49 @@ async def test_stream_verified_fresh_replay_moves_off_owner_after_previsible_quo
     replacement_account = _make_account("acc_stream_replay_replacement")
     session_id = "sid_stream_verified_fresh_replay"
     previous_response_id = "resp_stream_verified_owner"
+    unanchored = replay_kind.startswith("durable_unanchored")
+    should_replay = replay_kind in {"local_anchor", "durable_anchor", "durable_unanchored"}
     request_logs.response_owner_by_id[(previous_response_id, None, session_id)] = owner_account.id
     initial_input: list[JsonValue] = [{"role": "user", "content": "first turn"}]
     full_input: list[JsonValue] = [
         *initial_input,
         {"role": "user", "content": "fresh full resend"},
     ]
+    expected_input = full_input
+    if not replay_kind.startswith("local_anchor"):
+        full_input = [
+            *initial_input,
+            {"type": "reasoning", "id": "rs_synthetic", "encrypted_content": "synthetic-bookkeeping"},
+            {"role": "assistant", "content": [{"type": "output_text", "text": "prior answer"}]},
+            {
+                "role": "user",
+                "content": [
+                    {"type": "input_text", "text": "inspect this image"},
+                    {"type": "input_image", "image_url": "data:image/png;base64,aGVsbG8="},
+                ],
+            },
+        ]
+        expected_input = [full_input[0], *full_input[2:]]
+        if replay_kind.endswith("compaction"):
+            full_input.insert(1, {"type": "compaction", "encrypted_content": "synthetic-compaction"})
+    monkeypatch.setattr(
+        service._durable_bridge,
+        "lookup_request_targets",
+        AsyncMock(
+            return_value=SimpleNamespace(
+                session_id="synthetic-durable-session",
+                account_id="other_owner" if replay_kind.endswith("wrong_owner") else owner_account.id,
+                latest_response_id=previous_response_id,
+                latest_input_item_count=len(initial_input),
+                latest_input_full_fingerprint=(
+                    "mismatched"
+                    if replay_kind.endswith("missing_proof")
+                    else proxy_service._fingerprint_input_items(initial_input)
+                ),
+                latest_pending_tool_calls=None,
+            )
+        ),
+    )
     service._websocket_continuity_index[(session_id, None)] = proxy_service._WebSocketContinuityState(
         last_completed_response_id=previous_response_id,
         last_completed_input_count=len(initial_input),
@@ -36653,17 +36710,41 @@ async def test_stream_verified_fresh_replay_moves_off_owner_after_previsible_quo
 
     async def fake_select_account(**kwargs):
         selection_calls.append(dict(kwargs))
-        if kwargs.get("required_account_id") == owner_account.id:
+        if len(selection_calls) == 1:
+            assert kwargs.get("required_account_id") == (
+                None if unanchored and not replay_kind.endswith(("turn_state", "file_owner")) else owner_account.id
+            )
             return AccountSelection(account=owner_account, error_message=None)
         assert kwargs.get("required_account_id") is None
+        assert should_replay
         assert kwargs.get("exclude_account_ids") == {owner_account.id}
         assert kwargs.get("reallocate_sticky") is True
         return AccountSelection(account=replacement_account, error_message=None)
 
     async def fake_stream(payload, headers, access_token, account_id, base_url=None, raise_for_status=False, **kwargs):
-        del headers, access_token, base_url, raise_for_status, kwargs
+        del base_url, kwargs
         streamed_payloads.append(payload)
+        simulation_url = os.environ.get("CODEX_LB_TEST_QUOTA_SIMULATION_URL")
+        if simulation_url and not replay_kind.endswith("visible"):
+            parsed = urlsplit(simulation_url)
+            assert parsed.scheme == "http" and parsed.hostname == "127.0.0.1"
+            async with aiohttp.ClientSession() as session:
+                async for chunk in proxy_module.stream_responses(
+                    payload,
+                    headers,
+                    access_token,
+                    account_id,
+                    base_url=simulation_url,
+                    raise_for_status=raise_for_status,
+                    session=session,
+                    upstream_stream_transport_override="http",
+                    suppress_live_usage=True,
+                ):
+                    yield chunk
+            return
         if account_id == owner_account.chatgpt_account_id:
+            if replay_kind.endswith("visible"):
+                yield 'data: {"type":"response.output_text.delta","delta":"visible answer"}\n\n'
             yield (
                 'data: {"type":"response.failed","response":{"id":"resp_owner_quota",'
                 '"status":"failed","error":{"code":"usage_limit_reached",'
@@ -36692,17 +36773,33 @@ async def test_stream_verified_fresh_replay_moves_off_owner_after_previsible_quo
             "model": "gpt-5.6-sol",
             "instructions": "test verified full replay",
             "input": full_input,
-            "previous_response_id": previous_response_id,
+            "previous_response_id": None if unanchored else previous_response_id,
             "stream": True,
         }
     )
 
-    chunks = [chunk async for chunk in service.stream_responses(payload, {"session_id": session_id})]
+    headers = {"session_id": session_id}
+    if replay_kind.endswith("turn_state"):
+        headers["x-codex-turn-state"] = "synthetic-bound-turn"
+        request_logs.response_owner_by_id[(previous_response_id, None, "synthetic-bound-turn")] = owner_account.id
+        monkeypatch.setattr(service, "_resolve_compact_turn_state_owner", AsyncMock(return_value=owner_account.id))
+    if replay_kind.endswith("file_owner"):
+        monkeypatch.setattr(service, "_resolve_file_account_for_responses", AsyncMock(return_value=owner_account.id))
 
+    chunks = [chunk async for chunk in service.stream_responses(payload, headers)]
+
+    if not should_replay:
+        assert len(selection_calls) == 1
+        assert len(streamed_payloads) == 1
+        assert json.loads(chunks[-1].split("data: ", 1)[1])["type"] == "response.failed"
+        return
     assert json.loads(chunks[-1].split("data: ", 1)[1])["type"] == "response.completed"
     assert len(selection_calls) >= 2
-    assert [streamed.previous_response_id for streamed in streamed_payloads] == [previous_response_id, None]
-    assert streamed_payloads[1].input == full_input
+    assert [streamed.previous_response_id for streamed in streamed_payloads] == [
+        None if unanchored else previous_response_id,
+        None,
+    ]
+    assert streamed_payloads[1].input == expected_input
 
 
 @pytest.mark.asyncio

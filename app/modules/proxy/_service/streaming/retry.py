@@ -27,12 +27,18 @@ from app.core.resilience.network_recovery import (
     NetworkRecoveryDecision,
     ProcessNetworkRecovery,
 )
+from app.core.types import JsonValue
 from app.core.upstream_proxy import UpstreamProxyRouteError
 from app.core.utils.request_id import ensure_request_id
 from app.core.utils.retry import backoff_seconds
 from app.core.utils.sse import format_sse_event
 from app.db.models import Account, StickySessionKind
 from app.modules.api_keys.service import ApiKeyData, ApiKeyUsageReservationData
+from app.modules.proxy._service.http_bridge.helpers import (
+    _make_http_bridge_session_header_fallback_key,
+    _make_http_bridge_session_key,
+)
+from app.modules.proxy._service.http_bridge.streaming import _verify_durable_full_resend
 from app.modules.proxy._service.observability import (
     _maybe_log_proxy_request_shape,
     _record_continuity_fail_closed,
@@ -59,6 +65,8 @@ from app.modules.proxy._service.websocket.helpers import (
     _websocket_input_items_are_self_contained_fresh_replay,
 )
 from app.modules.proxy.affinity import (
+    _AffinityPolicy,
+    _codex_backend_identity,
     _is_synthesized_turn_state,
     _owner_lookup_session_id_from_headers,
     _prompt_cache_key_from_request_model,
@@ -79,7 +87,10 @@ from app.modules.proxy.helpers import (
     is_upstream_model_capacity_error,
 )
 from app.modules.proxy.load_balancer import AccountLease, AccountSelection
-from app.modules.proxy.replay_safety import responses_payload_is_account_neutral_fresh_replay
+from app.modules.proxy.replay_safety import (
+    project_responses_input_for_account_neutral_fresh_replay,
+    responses_payload_is_account_neutral_fresh_replay,
+)
 from app.modules.proxy.selection_errors import USAGE_LIMIT_REACHED, selection_failure_response
 
 _REQUEST_TRANSPORT_HTTP = "http"
@@ -182,6 +193,73 @@ def _verified_cross_transport_fresh_replay(
     if not responses_payload_is_account_neutral_fresh_replay(fresh_payload.to_replay_safety_payload()):
         return None
     return fresh_payload
+
+
+async def _verified_durable_stream_fresh_replay(
+    proxy: _StreamingServiceProtocol,
+    *,
+    payload: ResponsesRequest,
+    headers: Mapping[str, str],
+    affinity: _AffinityPolicy,
+    api_key: ApiKeyData | None,
+    request_id: str,
+) -> tuple[ResponsesRequest, str] | None:
+    if (
+        not isinstance(payload.input, list)
+        or extract_input_file_ids(payload.input)
+        or responses_payload_is_account_neutral_fresh_replay(payload.to_replay_safety_payload())
+    ):
+        return None
+    explicit_cache_key = _prompt_cache_key_from_request_model(payload)
+    key = _make_http_bridge_session_key(
+        payload,
+        headers=headers,
+        affinity=affinity,
+        api_key=api_key,
+        request_id=request_id,
+        explicit_prompt_cache_key=explicit_cache_key,
+    )
+    # Process session IDs and cache keys can be shared by sibling Codex chats.
+    session_alias = None
+    if _codex_backend_identity(headers).thread_id is None:
+        fallback_key = _make_http_bridge_session_header_fallback_key(
+            headers=headers,
+            api_key=api_key,
+            explicit_prompt_cache_key=explicit_cache_key,
+        )
+        session_alias = fallback_key.affinity_key if fallback_key is not None else None
+    try:
+        lookup = await proxy._durable_bridge.lookup_request_targets(
+            session_key_kind=key.affinity_kind,
+            session_key_value=key.affinity_key,
+            api_key_id=key.api_key_id,
+            turn_state=_sticky_key_from_turn_state_header(headers),
+            session_header=session_alias,
+            previous_response_id=payload.previous_response_id,
+        )
+    except ProxyResponseError:
+        raise
+    except Exception:
+        # Optional recovery evidence being unavailable must never permit replay.
+        logger.warning("stream_fresh_replay_metadata_unavailable request_id=%s", request_id)
+        return None
+    if lookup is None or (
+        payload.previous_response_id is not None and payload.previous_response_id != lookup.latest_response_id
+    ):
+        return None
+    proof = _verify_durable_full_resend(payload, lookup)
+    if proof is None or lookup.account_id is None:
+        return None
+    projection = project_responses_input_for_account_neutral_fresh_replay(
+        cast(list[JsonValue], payload.input),
+        stored_count=proof.stored_input_item_count,
+    )
+    if projection is None:
+        return None
+    fresh_payload = payload.model_copy(update={"previous_response_id": None, "input": projection.input_items})
+    if not responses_payload_is_account_neutral_fresh_replay(fresh_payload.to_replay_safety_payload()):
+        return None
+    return fresh_payload, lookup.account_id
 
 
 def _effective_http_downstream_transport_policy(
@@ -419,6 +497,18 @@ class _StreamingRetryMixin:
             headers=headers,
             api_key=api_key,
         )
+        verified_fresh_replay_owner_id: str | None = None
+        if verified_fresh_replay_payload is None and rewritten_file_account_id is None:
+            durable_replay = await _verified_durable_stream_fresh_replay(
+                proxy,
+                payload=payload,
+                headers=headers,
+                affinity=affinity,
+                api_key=api_key,
+                request_id=request_id,
+            )
+            if durable_replay is not None:
+                verified_fresh_replay_payload, verified_fresh_replay_owner_id = durable_replay
 
         async def _release_tracked_stream_lease(lease: AccountLease | None) -> None:
             if lease is None:
@@ -599,15 +689,22 @@ class _StreamingRetryMixin:
             )
 
         def _move_verified_fresh_replay_from_owner(*, account_id: str, outcome: str) -> bool:
-            # Only a proxy-injected owner anchor with locally verified full
-            # input may move; the failed owner stays excluded so sticky
-            # selection cannot immediately loop back to it.
+            # Replace the bound body atomically; the failed owner stays excluded.
             nonlocal affinity, payload, payload_replay_required_account_id
             nonlocal preferred_account_id, require_preferred_account, verified_fresh_replay_payload
             if not (
-                require_preferred_account
-                and preferred_account_id == account_id
-                and verified_fresh_replay_payload is not None
+                verified_fresh_replay_payload is not None
+                and file_preferred_account_id is None
+                and turn_state_owner_account_id is None
+                and (
+                    (require_preferred_account and preferred_account_id == account_id)
+                    or (
+                        payload_replay_required_account_id == account_id
+                        and preferred_account_id in (None, account_id)
+                        and verified_fresh_replay_owner_id == account_id
+                    )
+                )
+                and verified_fresh_replay_owner_id in (None, account_id)
             ):
                 return False
             if not responses_payload_is_account_neutral_fresh_replay(
